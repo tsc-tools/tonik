@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tsctools"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
@@ -12,7 +12,7 @@ authors = [
 
 description = "A collection of tools to integrate with GNS Science's time series classification platform."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.7"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
@@ -21,7 +21,7 @@ classifiers = [
 dependencies = [
     "xarray",
     "pandas",
-    "netcdf4>=1.6",
+    "netcdf4",
     "h5netcdf",
     "pytest"
 ]
