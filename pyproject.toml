@@ -9,7 +9,8 @@ authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
 ]
-description = "Tools needed for GNS Sciences time-series classification platform"
+
+description = "A collection of tools to integrate with GNS Science's time series classification platform."
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [
@@ -26,5 +27,5 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/pypa/sampleproject"
-Issues = "https://github.com/pypa/sampleproject/issues"
+Homepage = "https://github.com/SAM-Toolbox/tsctools"
+Issues = "https://github.com/SAM-Toolbox/tsctools/issues"
