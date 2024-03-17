@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tsctools"
-version = "0.0.3"
+version = "0.0.4"
 authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
@@ -19,6 +19,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "h5py",
     "xarray",
     "pandas",
     "netcdf4",
