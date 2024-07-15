@@ -1,0 +1,5 @@
+site_name: Tonik 
+nav:
+  - Home: index.md
+  - User Guide: user_guide.md
+theme: readthedocs

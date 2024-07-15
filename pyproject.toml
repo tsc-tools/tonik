@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tsctools"
-version = "0.0.4"
+name = "tonik"
+version = "0.0.1"
 authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
@@ -24,9 +24,10 @@ dependencies = [
     "pandas",
     "netcdf4",
     "h5netcdf",
-    "pytest"
+    "pytest",
+    "python-json-logger"
 ]
 
 [project.urls]
-Homepage = "https://github.com/SAM-Toolbox/tsctools"
-Issues = "https://github.com/SAM-Toolbox/tsctools/issues"
+Homepage = "https://github.com/tsc-tools/tonik"
+Issues = "https://github.com/tsc-tools/tonik/issues"

@@ -3,10 +3,9 @@ import logging
 import os
 from warnings import filterwarnings
 
-from cftime import num2date, date2num, date2index
+from cftime import num2date, date2num
 import h5netcdf
 import numpy as np
-import xarray as xr
 
 
 def xarray2hdf5(xArray, fdir, rootGroupName="original", timedim="datetime"):

@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 import xarray as xr
 
-from tsctools import xarray2hdf5
+from tonik import xarray2hdf5
 
 
 def generate_test_data(dim=1, nhours=30, nfreqs=10,
