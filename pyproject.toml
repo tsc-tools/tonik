@@ -19,14 +19,19 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "h5py",
-    "xarray",
-    "pandas",
-    "netcdf4",
-    "h5netcdf",
-    "pytest",
-    "python-json-logger"
+    "h5py>=3.8",
+    "datashader>=0.14",
+    "xarray>=2023.4",
+    "pandas>=2.0",
+    "netcdf4>=1.6",
+    "h5netcdf>=1.1",
+    "python-json-logger>=2.0",
+    "uvicorn[standard]>=0.22",
+    "fastapi>=0.95"
 ]
+
+[project.optional-dependencies]
+dev = ["pytest"]
 
 [project.urls]
 Homepage = "https://tsc-tools.github.io/tonik.github.io"

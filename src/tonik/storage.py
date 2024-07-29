@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import glob
 import logging
 import logging.config
 import os
@@ -81,96 +82,31 @@ logging.config.dictConfig(LOGGING_CONFIG)
 logger = logging.getLogger("__name__")
 
 
-class LockerRoom:
-    """
-    Query computed features
+class Path(object):
+    def __init__(self, name, parentdir):
+        self.name = name
+        self.path = os.path.join(parentdir, name)
+        os.makedirs(self.path, exist_ok=True)
+        self.children = {}
+    
+    def __str__(self):
+        return self.path
+    
+    def __getitem__(self, key):
+        try:
+            return self.children[key]
+        except KeyError:
+            self.children[key] = Path(key, self.path)
+            return self.children[key]
 
-    :param rootdir: Path to parent directory.
-    :type rootdir: str
-    :param starttime: Begin of request
-    :type starttime: :class:`datetime.datetime`
-    :param endtime: Begin of request
-    :type endtime: :class:`datetime.datetime`
+    def feature_path(self, feature):
+        _feature_path = os.path.join(self.path, feature + ".nc")
+        if not os.path.exists(_feature_path):
+            raise FileNotFoundError(f"File {_feature_path} not found")
+        self.children[feature] = _feature_path
+        return _feature_path
 
-    >>> import datetime
-    >>> fq = FeatureRequest()
-    >>> start = datetime.datetime(2012,1,1,0,0,0)
-    >>> end = datetime.datetime(2012,1,2,23,59,59)
-    >>> group = 'Whakaari'
-    >>> site = 'WIZ'
-    >>> chan = 'HHZ'
-    >>> fq.group = group
-    >>> fq.starttime = start
-    >>> fq.endtime = end
-    >>> fq.site = site
-    >>> fq.channel = chan
-    >>> rsam = fq("rsam")
-    """
-    def __init__(self, group, rootdir=tempfile.gettempdir(),
-                 starttime=None, endtime=None):
-        self.groupdir = os.path.join(rootdir, group)
-        self.lockers = {} 
-
-    def get_locker(self, site, location, channel):
-        key = (site, location, channel)
-        if key not in self.lockers:
-            self.lockers[key] = Locker(site, location, channel, rootdir=self.groupdir)
-        return self.lockers[key]
-
-    def __repr__(self):
-        rstr = f"LockerRoom: {self.groupdir}\n"
-        for site, location, channel in self.lockers.keys():
-            rstr += f"Site: {site}, Location: {location}, Channel: {channel}\n" 
-        return rstr
-
-    def get_starttime(self):
-        return self.__starttime
-
-    def set_starttime(self, time):
-        if time is None:
-            self.__starttime = None
-            self.__sdate = None
-            return
-        self.__starttime = time
-        self.__sdate = '{}{:02d}{:02d}'.format(time.year,
-                                               time.month,
-                                               time.day)
-        for key, locker in self.lockers.items():
-            locker.starttime = time
-
-    def get_endtime(self):
-        return self.__endtime
-
-    def set_endtime(self, time):
-        if time is None:
-            self.__endtime = None
-            self.__edate = None
-            return
-        self.__endtime = time
-        self.__edate = '{}{:02d}{:02d}'.format(time.year,
-                                               time.month,
-                                               time.day)
-        for key, locker in self.lockers.items():
-            locker.endtime = time
-
-    starttime = property(get_starttime, set_starttime)
-    endtime = property(get_endtime, set_endtime)
-
-
-class Locker:
-    def __init__(self, site=None, location=None, channel=None,
-                 rootdir=None, starttime=None, endtime=None,
-                 interval='10min'):
-
-        self.site = site
-        self.location = location
-        self.channel = channel
-        self.starttime = starttime
-        self.endtime = endtime
-        self.rootdir = rootdir
-        self.interval = interval
-
-    def __call__(self, feature, stack_length=None):
+    def __call__(self, feature, stack_length=None, interval='10min'):
         """
         Request a particular feature
 
@@ -184,9 +120,7 @@ class Locker:
             raise ValueError('Startime has to be smaller than endtime.')
 
         feature = feature.lower()
-        filename = os.path.join(self.sitedir, '%s.nc' % feature)
-        if not os.path.isfile(filename):
-            raise ValueError('Feature {} does not exist.'.format(feature))
+        filename = self.feature_path(feature)
 
         logger.debug(f"Reading feature {feature} between {self.starttime} and {self.endtime}")
         num_periods = None
@@ -199,24 +133,22 @@ class Locker:
                         format(', '.join(valid_stack_units))
                 )
 
-            if pd.to_timedelta(stack_length) < pd.to_timedelta(self.interval):
+            if pd.to_timedelta(stack_length) < pd.to_timedelta(interval):
                 raise ValueError('Stack length {} is less than interval {}'.
-                                 format(stack_length, self.interval))
+                                 format(stack_length, interval))
 
             # Rewind starttime to account for stack length
             self.starttime -= pd.to_timedelta(stack_length)
 
             num_periods = (pd.to_timedelta(stack_length)/
-                           pd.to_timedelta(self.interval))
+                           pd.to_timedelta(interval))
             if not num_periods.is_integer():
                 raise ValueError(
                     'Stack length {} / interval {} = {}, but it needs'
                     ' to be a whole number'.
-                        format(stack_length, self.interval, num_periods))
+                        format(stack_length, interval, num_periods))
 
-        xd_index = dict(datetime=slice(self.starttime,
-                                       (self.endtime-
-                                        pd.to_timedelta(self.interval))))
+        xd_index = dict(datetime=slice(self.starttime, self.endtime))
         with xr.open_dataset(filename, group='original', engine='h5netcdf') as ds:
             ds.sortby("datetime")
             rq = ds.loc[xd_index].load()
@@ -232,7 +164,7 @@ class Locker:
                 self.starttime += pd.to_timedelta(stack_length)
                 xdf_new = xdf.loc[
                         self.starttime:
-                        self.endtime-pd.to_timedelta(self.interval)]
+                        self.endtime-pd.to_timedelta(interval)]
                 xdf_new = xdf_new.rename(feature)
             except ValueError as e:
                 logger.error(e)
@@ -242,40 +174,6 @@ class Locker:
                 return xdf_new
 
         return rq[feature]
-
-    def get_site(self):
-        return self.__site
-
-    def set_site(self, value):
-        self.__site = value
-
-    def get_location(self):
-        return self.__location
-
-    def set_location(self, value):
-        self.__location = value
-
-    def get_channel(self):
-        return self.__channel
-
-    def set_channel(self, value):
-        self.__channel = value
-
-    @property
-    def sitedir(self):
-        try:
-            __sdir =  os.path.join(self.rootdir,
-                                   self.site,
-                                   self.location,
-                                   self.channel)
-            os.makedirs(__sdir, exist_ok=True)
-            return __sdir
-        except TypeError:
-            return None
-
-    site = property(get_site, set_site)
-    location = property(get_location, set_location)
-    channel = property(get_channel, set_channel)
 
     def load(self, *args, **kwargs):
         """
@@ -287,4 +185,108 @@ class Locker:
         """
         Save a feature to disk
         """
-        xarray2hdf5(data, self.sitedir)
+        xarray2hdf5(data, self.path)
+
+
+class StorageGroup(Path):
+    """
+    Query computed features
+
+    :param rootdir: Path to parent directory.
+    :type rootdir: str
+    :param starttime: Begin of request
+    :type starttime: :class:`datetime.datetime`
+    :param endtime: Begin of request
+    :type endtime: :class:`datetime.datetime`
+
+    >>> import datetime
+    >>> g = Group('Whakaari')
+    >>> start = datetime.datetime(2012,1,1,0,0,0)
+    >>> end = datetime.datetime(2012,1,2,23,59,59)
+    >>> g.starttime = start
+    >>> g.endtime = end
+    >>> c = g.channel(site='WIZ', sensor='00', channel='HHZ')
+    >>> rsam = c("rsam")
+    """
+    def __init__(self, name, rootdir=None, starttime=None, endtime=None):
+        self.channels = set() 
+        self.starttime = starttime
+        self.endtime = endtime
+        super().__init__(name, rootdir)
+
+    def __repr__(self):
+        rstr = f"Group: {self.name}\n"
+        last_site = False
+        for j, site in enumerate(self.children.values()):
+            if j == len(self.children) - 1:
+                last_site = True
+            rstr += f"|__ {site.name}\n"
+            last_sensor = False
+            for i, sensor in enumerate(site.children.values()):
+                if i == len(site.children) - 1:
+                    last_sensor = True
+                rstr += (" " if last_site else "|") + f"  |__ {sensor.name}\n"
+                for k, channel in enumerate(sensor.children.values()):
+                    rstr += ("   " if last_site else "|  ") 
+                    rstr += ("   " if last_sensor else "|  ") 
+                    rstr += f"|__ {channel.name}\n"
+        return rstr
+
+    def site(self, site):
+        return self[site]
+    
+    def sensor(self, site, sensor):
+        return self[site][sensor]
+    
+    def channel(self, site, sensor, channel):
+        c = self[site][sensor][channel]
+        c.starttime = self.starttime
+        c.endtime = self.endtime
+        self.channels.add(c)
+        return c
+
+    def from_directory(self):
+        feature_files = glob.glob(os.path.join(self.path, '**', '*.nc'),
+                                  recursive=True)
+        for _f in feature_files:
+            subdir = _f.split(self.path)[1].strip(os.sep)
+            # split the path into parts
+            # get the subdirectories
+            site, sensor, channel, ffile = subdir.split(os.sep) 
+            fname = ffile.strip('.nc')
+            c = self.channel(site, sensor, channel) 
+
+    def get_starttime(self):
+        return self.__starttime
+
+    def set_starttime(self, time):
+        if time is None:
+            self.__starttime = None
+            self.__sdate = None
+            return
+        self.__starttime = time
+        self.__sdate = '{}{:02d}{:02d}'.format(time.year,
+                                               time.month,
+                                               time.day)
+        for c in self.channels:
+            c.starttime = time
+
+    def get_endtime(self):
+        return self.__endtime
+
+    def set_endtime(self, time):
+        if time is None:
+            self.__endtime = None
+            self.__edate = None
+            return
+        self.__endtime = time
+        self.__edate = '{}{:02d}{:02d}'.format(time.year,
+                                               time.month,
+                                               time.day)
+        for c in self.channels:
+            c.endtime = time
+
+
+    starttime = property(get_starttime, set_starttime)
+    endtime = property(get_endtime, set_endtime)
+
