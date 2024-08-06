@@ -1,4 +1,4 @@
-# How to issue a new zizou release
+# How to issue a new tonik release
 
 ## Pypi
 Install the build system
@@ -45,7 +45,7 @@ git init
 git add .
 git commit -m "update documentation"
 git branch -m main
-git add origin git@github.com:tsc-tools/tonik.github.io.git
+git remote add origin git@github.com:tsc-tools/tonik.github.io.git
 git push -u --force origin main
 ```
 [Github pages](https://pages.github.com/) will then publish the documentation under https://tsc-tools.github.io/tonik.github.io

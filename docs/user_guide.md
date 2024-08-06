@@ -1,4 +1,4 @@
-## Examples on how to store and retrieve data using lockerroom
+## Examples on how to store and retrieve data using StorageGroup
 
 ```python
 from datetime import datetime
