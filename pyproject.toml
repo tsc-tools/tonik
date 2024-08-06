@@ -36,3 +36,6 @@ dev = ["pytest"]
 [project.urls]
 Homepage = "https://tsc-tools.github.io/tonik.github.io"
 Issues = "https://github.com/tsc-tools/tonik/issues"
+
+[project.scripts]
+tonik_api = "tonik.api:main"
