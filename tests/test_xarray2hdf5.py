@@ -19,7 +19,7 @@ def test_xarray2hdf5(tmp_path_factory):
     g = StorageGroup('test_experiment', rootdir=temp_dir,
                      starttime=datetime.fromisoformat(xdf.attrs['starttime']),
                      endtime=datetime.fromisoformat(xdf.attrs['endtime']))
-    c = g.channel('MDR', '00', 'HHZ')
+    c = g.get_store('MDR', '00', 'HHZ')
     c.save(xdf)
 
     xdf_test = c('ssam') 
@@ -44,7 +44,7 @@ def test_xarray2hdf5_with_gaps(tmp_path_factory):
     xdf2 = generate_test_data(dim=1, ndays=1, tstart=end)
     g = StorageGroup('test_experiment', rootdir=temp_dir,
                      starttime=start, endtime=end + timedelta(days=1))
-    c = g.channel('MDR', '00', 'HHZ')
+    c = g.get_store('MDR', '00', 'HHZ')
     c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('rsam') 

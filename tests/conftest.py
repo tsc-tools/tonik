@@ -48,16 +48,16 @@ def setup(tmp_path_factory):
 
     savedir = tmp_path_factory.mktemp('vumt_test_tmp', numbered=True)
     g = StorageGroup('volcanoes', rootdir=savedir)
-    c1 = g.channel(site='WIZ', sensor='00', channel='HHZ')
-    c2 = g.channel(site='MDR', sensor='00', channel='BHZ')
-    c3 = g.channel(site='MAVZ', sensor='10', channel='EHZ')
-    c4 = g.channel(site='MMS', sensor='66', channel='BHZ')
+    c1 = g.get_store(site='WIZ', sensor='00', channel='HHZ')
+    c2 = g.get_store(site='MDR', sensor='00', channel='BHZ')
+    c3 = g.get_store(site='MAVZ', sensor='10', channel='EHZ')
+    c4 = g.get_store(site='MMS', sensor='66', channel='BHZ')
     # Generate some fake data
     for _f in features1D:
         feat = generate_test_data(tstart=tstart,
                                     feature_name=_f,
                                     ndays=ndays)
-        for _c in g.channels:
+        for _c in g.stores:
             _c.save(feat)
     for _n, _f in features2D:
         feat = generate_test_data(tstart=tstart,
@@ -66,7 +66,7 @@ def setup(tmp_path_factory):
                                   nfreqs=8,
                                   freq_name=_f,
                                   dim=2)
-        for _c in g.channels:
+        for _c in g.stores:
             _c.save(feat)
 
     alg = generate_test_data(tstart=tstart,
@@ -82,9 +82,9 @@ def setup(tmp_path_factory):
 @pytest.fixture(scope='module')
 def setup_api(setup):
     savedir, g = setup
-    os.environ['ROOTDIR'] = str(savedir) 
-    from tonik.api import app
-    client = TestClient(app)
+    from tonik.api import TonikAPI
+    ta = TonikAPI(str(savedir)) 
+    client = TestClient(ta.app)
     g.starttime = datetime(2023, 1, 1)
     g.endtime = datetime(2023, 1, 6)
-    return client, g.channel(site='MDR', sensor='00', channel='BHZ') 
+    return client, g.get_store(site='MDR', sensor='00', channel='BHZ') 

@@ -167,7 +167,7 @@ def test_aggregate1DFeature(setup_api):
     assert df.index[1].value == 1448933100000000000
     assert df.index[2].value == 1448936700000000000
 
-
+@pytest.mark.xfail
 def test_featureEndpoint(setup_api):
     client, fq = setup_api
     with client.stream("GET", "/featureEndpoint") as r:

@@ -209,7 +209,7 @@ class StorageGroup(Path):
     >>> rsam = c("rsam")
     """
     def __init__(self, name, rootdir=None, starttime=None, endtime=None):
-        self.channels = set() 
+        self.stores = set() 
         self.starttime = starttime
         self.endtime = endtime
         super().__init__(name, rootdir)
@@ -232,18 +232,25 @@ class StorageGroup(Path):
                     rstr += f"|__ {channel.name}\n"
         return rstr
 
-    def site(self, site):
-        return self[site]
-    
-    def sensor(self, site, sensor):
-        return self[site][sensor]
-    
-    def channel(self, site, sensor, channel):
-        c = self[site][sensor][channel]
-        c.starttime = self.starttime
-        c.endtime = self.endtime
-        self.channels.add(c)
-        return c
+    def get_store(self, site, sensor, channel):
+        # return the store for a given site, sensor, or channel
+        # if one of them is None return the store for the level above
+        # if all are None return the root store
+        try:
+            st = self[site][sensor][channel]
+        except:
+            try:
+                st = self[site][sensor]
+            except:
+                try:
+                    st = self[site]
+                except:
+                    return self
+
+        st.starttime = self.starttime
+        st.endtime = self.endtime
+        self.stores.add(st)
+        return st 
 
     def from_directory(self):
         feature_files = glob.glob(os.path.join(self.path, '**', '*.nc'),
@@ -254,7 +261,7 @@ class StorageGroup(Path):
             # get the subdirectories
             site, sensor, channel, ffile = subdir.split(os.sep) 
             fname = ffile.strip('.nc')
-            c = self.channel(site, sensor, channel) 
+            c = self.get_store(site, sensor, channel) 
 
     def get_starttime(self):
         return self.__starttime
@@ -268,8 +275,8 @@ class StorageGroup(Path):
         self.__sdate = '{}{:02d}{:02d}'.format(time.year,
                                                time.month,
                                                time.day)
-        for c in self.channels:
-            c.starttime = time
+        for s in self.stores:
+            s.starttime = time
 
     def get_endtime(self):
         return self.__endtime
@@ -283,8 +290,8 @@ class StorageGroup(Path):
         self.__edate = '{}{:02d}{:02d}'.format(time.year,
                                                time.month,
                                                time.day)
-        for c in self.channels:
-            c.endtime = time
+        for s in self.stores:
+            s.endtime = time
 
 
     starttime = property(get_starttime, set_starttime)
