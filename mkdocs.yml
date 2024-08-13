@@ -6,4 +6,3 @@ theme: readthedocs
 
 plugins:
   - mkdocs-jupyter:
-      execute: true
