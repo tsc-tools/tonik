@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tonik"
-version = "0.0.4"
+version = "0.0.5"
 authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
@@ -38,7 +38,7 @@ dev = ["pytest",
        "mkdocs-jupyter"]
 
 [project.urls]
-Homepage = "https://tsc-tools.github.io/tonik.github.io"
+Homepage = "https://tsc-tools.github.io/tonik"
 Issues = "https://github.com/tsc-tools/tonik/issues"
 
 [project.scripts]

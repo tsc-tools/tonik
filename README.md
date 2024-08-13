@@ -13,6 +13,7 @@ For visualisations, the API can serve large requests very quickly by downsamplin
 * python-json-logger
 * uvicorn
 * fastapi
+* matplotlib (only needed to reproduce the examples in the user guide)
 
 ## Installation
 ```
@@ -21,8 +22,7 @@ pip install -U tonik
 
 ## Documentation
 
-Learn more about tonik in its official [documentation](https://tsc-tools.github.io/tonik.github.io/)
-Try out an [interactive Jupyter notebook](https://github.com/tsc-tools/tonik/tree/main/examples)
+Learn more about tonik in its official [documentation](https://tsc-tools.github.io/tonik)
 
 ## Contributing
 
