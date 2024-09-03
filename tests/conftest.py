@@ -48,10 +48,10 @@ def setup(tmp_path_factory):
 
     savedir = tmp_path_factory.mktemp('vumt_test_tmp', numbered=True)
     g = StorageGroup('volcanoes', rootdir=savedir)
-    c1 = g.get_store(site='WIZ', sensor='00', channel='HHZ')
-    c2 = g.get_store(site='MDR', sensor='00', channel='BHZ')
-    c3 = g.get_store(site='MAVZ', sensor='10', channel='EHZ')
-    c4 = g.get_store(site='MMS', sensor='66', channel='BHZ')
+    c1 = g.get_store('WIZ', '00', 'HHZ')
+    c2 = g.get_store('MDR', '00', 'BHZ')
+    c3 = g.get_store('MAVZ', '10', 'EHZ')
+    c4 = g.get_store('MMS', '66', 'BHZ')
     # Generate some fake data
     for _f in features1D:
         feat = generate_test_data(tstart=tstart,
@@ -87,4 +87,4 @@ def setup_api(setup):
     client = TestClient(ta.app)
     g.starttime = datetime(2023, 1, 1)
     g.endtime = datetime(2023, 1, 6)
-    return client, g.get_store(site='MDR', sensor='00', channel='BHZ') 
+    return client, g.get_store('MDR', '00', 'BHZ') 

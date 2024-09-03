@@ -8,7 +8,7 @@ import xarray as xr
 def generate_test_data(dim=1, ndays=30, nfreqs=10,
                        tstart=datetime.utcnow(),
                        feature_name=None,
-                       freq_name=None):
+                       freq_name=None, add_nans=True):
     """
     Generate a 1D or 2D feature for testing.
     """
@@ -25,12 +25,14 @@ def generate_test_data(dim=1, ndays=30, nfreqs=10,
     # Add 10% NaNs
     idx_nan = rs.integers(0, nints-1, int(0.1*nints))
     if dim == 1:
-        data[idx_nan] = np.nan
+        if add_nans:
+            data[idx_nan] = np.nan
         if feature_name is None:
             feature_name = 'rsam'
         xrd = xr.Dataset({feature_name: xr.DataArray(data, coords=[dates], dims=['datetime'])})
     if dim == 2:
-        data[:, idx_nan] = np.nan
+        if add_nans:
+            data[:, idx_nan] = np.nan
         freqs = np.arange(nfreqs)
         if feature_name is None:
             feature_name = 'ssam'
@@ -40,4 +42,5 @@ def generate_test_data(dim=1, ndays=30, nfreqs=10,
     xrd.attrs['starttime'] = dates[0].isoformat()
     xrd.attrs['endtime'] = dates[-1].isoformat()
     xrd.attrs['station'] = 'MDR'
+    xrd.attrs['interval'] = '10min'
     return xrd

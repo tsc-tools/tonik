@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import json
 import glob
 import logging
 import logging.config
@@ -86,13 +87,18 @@ class Path(object):
     def __init__(self, name, parentdir):
         self.name = name
         self.path = os.path.join(parentdir, name)
-        os.makedirs(self.path, exist_ok=True)
+        try:
+            os.makedirs(self.path, exist_ok=True)
+        except FileExistsError:
+            pass
         self.children = {}
     
     def __str__(self):
         return self.path
     
     def __getitem__(self, key):
+        if key is None:
+            raise ValueError("Key cannot be None")
         try:
             return self.children[key]
         except KeyError:
@@ -103,7 +109,7 @@ class Path(object):
         _feature_path = os.path.join(self.path, feature + ".nc")
         if not os.path.exists(_feature_path):
             raise FileNotFoundError(f"File {_feature_path} not found")
-        self.children[feature] = _feature_path
+        self.children[feature] = Path(feature + ".nc", self.path)
         return _feature_path
 
     def __call__(self, feature, stack_length=None, interval='10min'):
@@ -125,7 +131,7 @@ class Path(object):
         logger.debug(f"Reading feature {feature} between {self.starttime} and {self.endtime}")
         num_periods = None
         if stack_length is not None:
-            valid_stack_units = ['W', 'D', 'H', 'T', 'min', 'S']
+            valid_stack_units = ['W', 'D', 'h', 'T', 'min', 'S']
             if not re.match(r'\d*\s*(\w*)', stack_length).group(1)\
                    in valid_stack_units:
                 raise ValueError(
@@ -162,9 +168,7 @@ class Path(object):
                                         min_periods=1).mean()
                 # Return requested timeframe to that defined in initialisation
                 self.starttime += pd.to_timedelta(stack_length)
-                xdf_new = xdf.loc[
-                        self.starttime:
-                        self.endtime-pd.to_timedelta(interval)]
+                xdf_new = xdf.loc[self.starttime:self.endtime]
                 xdf_new = xdf_new.rename(feature)
             except ValueError as e:
                 logger.error(e)
@@ -181,11 +185,11 @@ class Path(object):
         """
         self.__call__(*args, **kwargs)
 
-    def save(self, data):
+    def save(self, data, **kwargs):
         """
         Save a feature to disk
         """
-        xarray2hdf5(data, self.path)
+        xarray2hdf5(data, self.path, **kwargs)
 
 
 class StorageGroup(Path):
@@ -213,39 +217,28 @@ class StorageGroup(Path):
         self.starttime = starttime
         self.endtime = endtime
         super().__init__(name, rootdir)
+    
+    def print_tree(self, site, indent=0, output=''):
+        output += ' ' * indent + site.path + '\n'
+        for site in site.children.values():
+            output += self.print_tree(site, indent + 2)
+        return output
 
     def __repr__(self):
         rstr = f"Group: {self.name}\n"
-        last_site = False
-        for j, site in enumerate(self.children.values()):
-            if j == len(self.children) - 1:
-                last_site = True
-            rstr += f"|__ {site.name}\n"
-            last_sensor = False
-            for i, sensor in enumerate(site.children.values()):
-                if i == len(site.children) - 1:
-                    last_sensor = True
-                rstr += (" " if last_site else "|") + f"  |__ {sensor.name}\n"
-                for k, channel in enumerate(sensor.children.values()):
-                    rstr += ("   " if last_site else "|  ") 
-                    rstr += ("   " if last_sensor else "|  ") 
-                    rstr += f"|__ {channel.name}\n"
+        rstr = self.print_tree(self, 0, rstr)
         return rstr
 
-    def get_store(self, site, sensor, channel):
+    def get_store(self, *args):
         # return the store for a given site, sensor, or channel
         # if one of them is None return the store for the level above
         # if all are None return the root store
         try:
-            st = self[site][sensor][channel]
-        except:
-            try:
-                st = self[site][sensor]
-            except:
-                try:
-                    st = self[site]
-                except:
-                    return self
+            st = self
+            for arg in args:
+                st = st[arg]
+        except KeyError:
+            return self
 
         st.starttime = self.starttime
         st.endtime = self.endtime
@@ -253,15 +246,38 @@ class StorageGroup(Path):
         return st 
 
     def from_directory(self):
-        feature_files = glob.glob(os.path.join(self.path, '**', '*.nc'),
-                                  recursive=True)
-        for _f in feature_files:
-            subdir = _f.split(self.path)[1].strip(os.sep)
-            # split the path into parts
-            # get the subdirectories
-            site, sensor, channel, ffile = subdir.split(os.sep) 
-            fname = ffile.strip('.nc')
-            c = self.get_store(site, sensor, channel) 
+        """
+        Construct the storage group from the root directory
+        """
+        for root, dirs, files in os.walk(self.path):
+            if files:
+                try:
+                    subdirs = root.split(self.path)[1].split(os.sep)[1:]
+                except IndexError:
+                    st = self.get_store()
+                else:
+                    try:
+                        st = self.get_store(*subdirs)
+                    except TypeError as e:
+                        raise e
+                for _f in files:
+                    if _f.endswith('.nc'):
+                        st.feature_path(_f.replace('.nc', ''))
+
+    @staticmethod
+    def directory_tree_to_dict(path):
+        name = os.path.basename(path)
+        if os.path.isdir(path):
+            return {name: [StorageGroup.directory_tree_to_dict(os.path.join(path, child)) for child in sorted(os.listdir(path))]}
+        else:
+            if path.endswith('.nc'):
+                return name.replace('.nc', '')
+
+    def to_dict(self):
+        """
+        Convert the storage group to json
+        """
+        return StorageGroup.directory_tree_to_dict(self.path)
 
     def get_starttime(self):
         return self.__starttime
@@ -276,7 +292,8 @@ class StorageGroup(Path):
                                                time.month,
                                                time.day)
         for s in self.stores:
-            s.starttime = time
+            if s is not self:
+                s.starttime = time
 
     def get_endtime(self):
         return self.__endtime
@@ -291,7 +308,8 @@ class StorageGroup(Path):
                                                time.month,
                                                time.day)
         for s in self.stores:
-            s.endtime = time
+            if s is not self:
+                s.endtime = time
 
 
     starttime = property(get_starttime, set_starttime)

@@ -1,18 +1,19 @@
 from argparse import ArgumentParser
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 import logging
 import os
+from urllib.parse import unquote
 
 from cftime import num2date, date2num
 import datashader as dsh
 import numpy as np
 import pandas as pd
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
-from typing import List
+from typing import Annotated
 
 from .storage import StorageGroup
 from . import get_data
@@ -24,7 +25,7 @@ class TonikAPI:
 
     def __init__(self, rootdir) -> None:
         self.rootdir = rootdir
-        self.app = FastAPI()
+        self.app = FastAPI() 
 
         # -- allow any origin to query API
         self.app.add_middleware(CORSMiddleware,
@@ -32,37 +33,46 @@ class TonikAPI:
 
         self.app.get("/", response_class=HTMLResponse)(self.root)
         self.app.get("/feature")(self.feature)
+        self.app.get("/inventory")(self.inventory)
 
-    async def root(self):
+    def root(self):
         with open(get_data("package_data/index.html"), "r", encoding="utf-8") as file:
             html_content = file.read()
         return HTMLResponse(content=html_content, status_code=200)
 
+    def preprocess_datetime(self, dt):
+        """
+        Convert datetime string to datetime object.
+        """
+        # remove timezone info
+        dt = dt.split('+')[0]
+        # remove 'Z' at the end
+        dt = dt.replace('Z', '')
+        # convert html encoded characters
+        dt = unquote(dt)
+        dt = datetime.fromisoformat(dt)
+        dt = dt.replace(tzinfo=None)
+        return dt
 
     def feature(self,
-                name: str='rsam',
                 group: str='Ruapehu',
-                site: str='MAVZ',
-                sensor: str='10',
-                channel: str='HHZ',
-                starttime: datetime=datetime.utcnow()-timedelta(days=30),
-                endtime: datetime=datetime.utcnow(),
+                name: str='rsam',
+                starttime: str=None,
+                endtime: str=None,
                 resolution: str='full',
                 verticalres: int=10,
-                log: bool=True,
-                normalise: bool=False):
-        
-        _st = datetime.fromisoformat(str(starttime))
-        _st = _st.replace(tzinfo=None)
-        _et = datetime.fromisoformat(str(endtime))
-        _et = _et.replace(tzinfo=None)
+                log: bool=False,
+                normalise: bool=False,
+                subdir: Annotated[list[str] | None, Query()]=None):
+        _st = self.preprocess_datetime(starttime)
+        _et = self.preprocess_datetime(endtime)
         g = StorageGroup(group, rootdir=self.rootdir,
                         starttime=_st, endtime=_et)
-        c = g.get_store(site=site, sensor=sensor, channel=channel)
+        c = g.get_store(*subdir)
         try:
             feat = c(name)
         except ValueError as e:
-            msg = f"Feature {name} not found in directory {l.sitedir}:"
+            msg = f"Feature {name} not found in directory {c.path}:"
             msg += f"{e}"
             raise HTTPException(status_code=404, detail=msg)
         if len(feat.shape) > 1:
@@ -117,153 +127,11 @@ class TonikAPI:
         dates = num2date(d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
         return freq,dates,spec
 
+    def inventory(self, group: str) -> dict:
+        sg = StorageGroup(group, rootdir=self.rootdir)
+        return sg.to_dict()
 
-# #pydanticmodel output: Json file
-# class Feature(BaseModel):
-#     name: list
-
-
-# class Channel(BaseModel):
-#     name: str
-#     features: List[Feature] = []
-
-
-# class Location(BaseModel):
-#     name: str
-#     channels: List[Channel] = [] 
-
-
-# class Station(BaseModel):
-#     name: str
-#     lat: float
-#     lon: float
-#     locations: List[Location] = []
-
-
-# class Group(BaseModel):
-#     volcano: str
-#     stations: List[Station] = []
-
-
-# def get_pydanticModel(group, station, location, channel, feature_list):
-
-#     channels_data = {"name": channel, "features": feature_list}
-#     channel_models = []
-#     channel_model = Channel(**channels_data)
-#     channel_models.append(channel_model)
-
-#     location_data = {"name": location, "channels": channel_models}
-#     location_models = []
-#     location_model = Location(**location_data)
-#     location_models.append(location_model)
-
-#     stations_data = {"name": station, "lat": "42", "lon": "171",
-#                      "locations": location_models}
-#     station_models = []
-#     station_model = Station(**stations_data)
-#     station_models.append(station_model)
-
-#     group_model = Group(group=group, stations=station_models)
-
-#     # Exporting to JSON
-#     json_data = group_model.json()
-#     return json_data
-
-
-# write a function that scans LOCKERROOMROOT for 
-# available groups, stations, locations, channels, and features
-# and returns a pydantic model
-# def get_available_features():
-#     groups = os.listdir(ROOT)
-#     group_models = []
-#     for group in groups:
-#         stations = os.listdir(os.path.join(LOCKERROOMROOT, group))
-#         station_models = []
-#         for station in stations:
-#             locations = os.listdir(os.path.join(LOCKERROOMROOT, group, station))
-#             location_models = []
-#             for location in locations:
-#                 channels = os.listdir(os.path.join(LOCKERROOMROOT, group, station, location))
-#                 channel_models = []
-#                 for channel in channels:
-#                     features = os.listdir(os.path.join(LOCKERROOMROOT, group, station, location, channel))
-#                     feature_list = []
-#                     for feature in features:
-#                         feature_list.append(feature)
-#                     channel_data = {"name": channel, "features": feature_list}
-#                     channel_model = Channel(**channel_data)
-#                     channel_models.append(channel_model)
-#                 location_data = {"name": location, "channels": channel_models}
-#                 location_model = Location(**location_data)
-#                 location_models.append(location_model)
-#             station_data = {"name": station, "lat": "42", "lon": "171", "locations": location_models}
-#             station_model = Station(**station_data)
-#             station_models.append(station_model)
-#         group_data = {"volcano": group, "stations": station_models}
-#         group_model = Group(**group_data)
-#         group_models.append(group_model)
-#     return group_models
-
-# @app.get("/featureEndpoint")
-# def featureEndpoint(group: str="all", station: str="all", channel: str="all",
-#                     type: str="all"):
-#     groups = vm.get_available_volcanoes()
-
-#     station_model_list = []
-#     channel_model_list = []
-#     volcano_model_list = []
-#     for _volcano in volcanoes:
-#         streams = vm.get_available_streams(_volcano) 
-#         for _stream in streams:
-#             _, _station, _, _channel = _stream.split('.') 
-#             stream_dir = os.path.join(FEATUREDIR, _volcano, _station, _channel)
-#             try:
-#                 feature_list = os.listdir(stream_dir)
-#             except (NotADirectoryError, FileNotFoundError):
-#                 continue
-#             feature_list = sorted([str(os.path.basename(path)).split('.nc')[0] for path in feature_list])
-#             channels_data = {"name": _channel, "features":feature_list}
-#             channel_model = Channel(**channels_data)
-#             channel_model_list.append(channel_model)
-#             try:
-#                 site_info = vm.get_site_information(_station)
-#                 lat = site_info['latitude']
-#                 lon = site_info['longitude'] 
-#             except:
-#                 lat, lon = -999.9, -999.9
-#             stations_data = {"name": _station, "lat": lat, "lon": lon, "channels":channel_model_list}
-#             station_model = Station(**stations_data)
-#             station_model_list.append(station_model)
-
-#         volcano_model = Volcano(volcano=_volcano, stations=station_model_list)
-#         volcano_model_list.append(volcano_model)
-
-#     if len(volcano_model_list) == 0:
-#         return('no volcano')
-
-#     scenario_model = Scenario(scenario='VUMT', volcanoes=volcano_model_list)
-#     if volcano != "all":
-#         # return all stations for a volcano
-#         for _volcano in scenario_model.volcanoes:
-#             if _volcano.volcano == volcano:
-#                 if station == "all":
-#                     return _volcano
-#                 for _station in _volcano.stations:
-#                     if _station.name == station:
-#                         if channel == "all":
-#                             return _station
-#                         for _channel in _station.channels:
-#                             if _channel.name == channel:
-#                                 feature_list_filtered = []
-#                                 for _f in _channel.features:
-#                                     if _f in FeatureRequest.feat_dict[type]:
-#                                         feature_list_filtered.append(_f)    
-#                                 _channel.features = feature_list_filtered
-#                                 return _channel
-
-#     return scenario_model
-
-
+# ta = TonikAPI('/tmp').feature()
 
 def main(argv=None):
     parser = ArgumentParser()
