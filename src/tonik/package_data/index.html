@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAM API Documentation</title>
+    <title>Tonik API Documentation</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -37,41 +37,35 @@
 <body>
 
 <header>
-    <h1>Your API Name</h1>
-    <p>Seismic Acoustic Monitoring Tool (SAM) - API</p>
+    <h1>Tonik</h1>
+    <p>Tonik - API</p>
 </header>
 
 <section>
     <h2>Overview</h2>
     <p>
-        Welcome to the documentation for Seismic Acoustic Monitoring API. This API provides access to waveform features and
-        analysis results computed by SAM.
+        Welcome to the documentation for the Tonik API. This API provides access to time-series stored with the tonik package.
     </p>
-
-    <!--h2>Authentication</h2>
-    <p>
-        To access the API, you need to authenticate using [authentication method]. Obtain your API key from [location].
-    </p-->
 
     <h2>Endpoints</h2>
     <p>
         The endpoints available in the API are:
     </p>
     <ul>
-        <li><strong>GET /feature:</strong> Request waveform features and analysis results.</li>
-        <li><strong>GET /featureEndpoint:</strong> Request meta information on available stations, features and results.</li>
+        <li><strong>GET /feature:</strong> Request time-series data.</li>
+        <li><strong>GET /inventory:</strong> Request information on data.</li>
     </ul>
 
     <h2>Code Examples</h2>
     <h3>Requesting meta data</h3>
-    The following will return information on available stations, features and results in JSON format.
+    The following will return information on available datasets in JSON format.
     <pre>
-        curl -X GET "http://your.host.server:yourport/featureEndpoint"
+        curl -X GET "http://your.host.server:yourport/inventory"
     </pre>
     To do the same with Python using requests you can use the following code:
     <pre>
         import requests
-        url = "http://your.host.server:yourport/featureEndpoint"
+        url = "http://your.host.server:yourport/inventory"
         response = requests.get(url)
         response.json()
     </pre>
@@ -79,7 +73,7 @@
     The following example shows how to request RSAM data for station WIZ at volcano Whakaari
     between 2019-12-01 and 2019-12-31. The return format is CSV.
     <pre>
-    curl -X GET "http://your.host.server:yourport/feature?name=rsam&starttime=2019-12-01T00:00:00&endtime=2019-12-31T00:00:00&volcano=Whakaari&site=WIZ"
+    curl -X GET "http://your.host.server:yourport/feature?name=rsam&starttime=2019-12-01T00:00:00&endtime=2019-12-31T00:00:00&subdir=Whakaari&subdir=WIZ"
     </pre>
     To do the same with Python using pandas you can use the following code:
     <pre>
@@ -89,7 +83,7 @@
         endtime="2019-12-31T00:00:00"
         volcano="Whakaari"
         site="WIZ"
-        url = f"http://your.host.server:yourport/feature?name={feature}&starttime={starttime}&endtime={endtime}&volcano={volcano}&site={site}"
+        url = f"http://your.host.server:yourport/feature?name={feature}&starttime={starttime}&endtime={endtime}&subdir={volcano}&subdir={site}"
         pd.read_csv(url, parse_dates=True, index_col=0)
     </pre>
 </section>
