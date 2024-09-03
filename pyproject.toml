@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tonik"
-version = "0.0.5"
+version = "0.0.6"
 authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
 ]
 
-description = "A collection of tools to integrate with GNS Science's time series classification platform."
+description = "Store time series data as HDF5 files and access them through an API."
 readme = "README.md"
 requires-python = ">=3.7"
 classifiers = [
@@ -43,3 +43,6 @@ Issues = "https://github.com/tsc-tools/tonik/issues"
 
 [project.scripts]
 tonik_api = "tonik.api:main"
+
+[tool.pytest.ini_options]
+log_cli = true
