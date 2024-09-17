@@ -8,6 +8,27 @@ import pandas as pd
 import pytest
 
 
+def test_errors(setup_api):
+    client, l = setup_api
+    params = dict(name='rsam',
+                  subdir=['MDR', '00', 'BHZ'],
+                  starttime=str(l.starttime),
+                  endtime=str(l.endtime))
+    with client.stream("GET", "/feature", params=params) as r:
+        r.read()
+        txt = r.text
+    assert r.status_code == 422
+
+    params = dict(group='volcanoes',
+                  subdir=['MDR', '00', 'BHZ'],
+                  starttime=str(l.starttime),
+                  endtime=str(l.endtime))
+    with client.stream("GET", "/feature", params=params) as r:
+        r.read()
+        txt = r.text
+    assert r.status_code == 422
+
+
 def test_read_1Dfeature(setup_api):
     client, l = setup_api
     params = dict(name='rsam',
@@ -21,7 +42,7 @@ def test_read_1Dfeature(setup_api):
     df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
     np.testing.assert_array_almost_equal(df['feature'].values,
                                          l('rsam').values)
-                 
+
 
 def test_html_tags(setup_api):
     client, l = setup_api
@@ -36,7 +57,8 @@ def test_html_tags(setup_api):
     df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
     np.testing.assert_array_almost_equal(df['feature'].values,
                                          l('rsam').values)
-    
+
+
 def test_read_ssam(setup_api):
     client, l = setup_api
     params = dict(name='ssam',
@@ -63,8 +85,9 @@ def test_read_ssam(setup_api):
         r.read()
         txt = r.text
     df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
-    assert len(np.unique(df.index)) ==  5
-    assert len(np.unique(df['freqs'])) == 8 
+    assert len(np.unique(df.index)) == 5
+    assert len(np.unique(df['freqs'])) == 8
+
 
 def test_read_filterbank(setup_api):
     client, l = setup_api
@@ -81,6 +104,7 @@ def test_read_filterbank(setup_api):
     df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
     np.testing.assert_array_almost_equal(df['feature'].values,
                                          l('filterbank').values.ravel(order='C'))
+
 
 def test_log(setup_api):
     client, l = setup_api
@@ -115,6 +139,7 @@ def test_autoencoder(setup_api):
     np.testing.assert_array_almost_equal(df['feature'].values,
                                          l('autoencoder').values.ravel(order='C'))
 
+
 def test_normalise(setup_api):
     client, l = setup_api
     params = dict(name='sonogram',
@@ -129,46 +154,48 @@ def test_normalise(setup_api):
         r.read()
         txt = r.text
     df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
-    assert np.nanmax(df['feature'].values) ==  1.
+    assert np.nanmax(df['feature'].values) == 1.
     assert np.nanmin(df['feature'].values) == 0.
 
-@pytest.mark.xfail
+
 def test_aggregate1DFeature(setup_api):
     client, fq = setup_api
     params = dict(name='rsam',
-                  volcano='Mt Doom',
+                  group='volcanoes',
                   subdir=['MDR', '00', 'BHZ'],
                   starttime=str(fq.starttime),
                   endtime=str(fq.endtime),
-                  resolution=3600000, #given in ms seconds by Grafana (here 1 hr)
+                  # given in ms seconds by Grafana (here 1 hr)
+                  resolution='1D',
                   log=False)
     with client.stream("GET", "/feature", params=params) as r:
         r.read()
         txt = r.text
 
     df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
-    assert df.index[1].value == 1448933100000000000
-    assert df.index[2].value == 1448936700000000000
+    assert pd.Timedelta(df.index.diff().mean()) > pd.Timedelta('10min')
+    assert pd.Timedelta(df.index.diff().mean()) <= pd.Timedelta('1D')
+
 
 def test_inventory(setup_api):
     client, fq = setup_api
     params = dict(group='volcanoes')
     with client.stream("GET", "/inventory", params=params) as r:
         r.read()
-        txt = r.text 
+        txt = r.text
     features = sorted(["sonogram", "predom_freq", "ssam", "bandwidth",
                        "filterbank", "central_freq", "rsam", "dsar",
                        "rsam_energy_prop", "autoencoder"])
     result_expected = {"volcanoes": [
-                            {"MDR":[
-                                {"00":[
-                                    {"BHZ": features}
-                                    ]
-                                }
-                                ]
-                            }
-                        ]
-                    }        
+        {"MDR": [
+            {"00": [
+                {"BHZ": features}
+            ]
+            }
+        ]
+        }
+    ]
+    }
     result_test = json.loads(txt)
     assert result_test['volcanoes'][1] == result_expected['volcanoes'][0]
 
@@ -177,5 +204,4 @@ def test_inventory(setup_api):
         txt = r.text
     result_test = json.loads(txt)
     test_features = result_test['volcanoes'][1]['MDR'][0]['00'][0]['BHZ']
-    assert sorted(test_features) == features 
-
+    assert sorted(test_features) == features

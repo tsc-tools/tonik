@@ -20,12 +20,12 @@ from . import get_data
 
 logger = logging.getLogger(__name__)
 
-                          
+
 class TonikAPI:
 
     def __init__(self, rootdir) -> None:
         self.rootdir = rootdir
-        self.app = FastAPI() 
+        self.app = FastAPI()
 
         # -- allow any origin to query API
         self.app.add_middleware(CORSMiddleware,
@@ -55,20 +55,23 @@ class TonikAPI:
         return dt
 
     def feature(self,
-                group: str='Ruapehu',
-                name: str='rsam',
-                starttime: str=None,
-                endtime: str=None,
-                resolution: str='full',
-                verticalres: int=10,
-                log: bool=False,
-                normalise: bool=False,
-                subdir: Annotated[list[str] | None, Query()]=None):
+                group: str,
+                name: str,
+                starttime: str = None,
+                endtime: str = None,
+                resolution: str = 'full',
+                verticalres: int = 10,
+                log: bool = False,
+                normalise: bool = False,
+                subdir: Annotated[list[str] | None, Query()] = None):
         _st = self.preprocess_datetime(starttime)
         _et = self.preprocess_datetime(endtime)
         g = StorageGroup(group, rootdir=self.rootdir,
-                        starttime=_st, endtime=_et)
-        c = g.get_store(*subdir)
+                         starttime=_st, endtime=_et)
+        if subdir is None:
+            c = g
+        else:
+            c = g.get_store(*subdir)
         try:
             feat = c(name)
         except ValueError as e:
@@ -80,7 +83,8 @@ class TonikAPI:
             nfreqs = feat.shape[0]
             dates = feat.coords[feat.dims[1]].values
             if resolution != 'full':
-                freq, dates, spec = self.aggregate_feature(resolution, verticalres, feat, nfreqs, dates)
+                freq, dates, spec = self.aggregate_feature(
+                    resolution, verticalres, feat, nfreqs, dates)
             else:
                 spec = feat.values
                 freq = feat.coords[feat.dims[0]].values
@@ -88,44 +92,50 @@ class TonikAPI:
             if log and feat.name != 'sonogram':
                 vals = 10*np.log10(vals)
             if normalise:
-                vals = (vals - np.nanmin(vals))/(np.nanmax(vals) - np.nanmin(vals))
+                vals = (vals - np.nanmin(vals)) / \
+                    (np.nanmax(vals) - np.nanmin(vals))
             freqs = freq.repeat(dates.size)
             dates = np.tile(dates, freq.size)
-            df = pd.DataFrame({'dates': dates, 'freqs': freqs, 'feature': vals})
+            df = pd.DataFrame(
+                {'dates': dates, 'freqs': freqs, 'feature': vals})
             output = df.to_csv(index=False,
-                            columns=['dates', 'freqs', 'feature'])
+                               columns=['dates', 'freqs', 'feature'])
         else:
             df = pd.DataFrame(data=feat.to_pandas(), columns=[feat.name])
             df['dates'] = df.index
             try:
-                df = df.resample(str(float(resolution)/60000.0)+'T').mean()
+                current_resolution = pd.Timedelta(df['dates'].diff().mean())
+                if current_resolution < pd.Timedelta(resolution):
+                    df = df.resample(pd.Timedelta(resolution)).mean()
             except ValueError as e:
-                logger.warning(f"Cannot resample {feat.name} to {resolution}: e")
+                logger.warning(
+                    f"Cannot resample {feat.name} to {resolution}: e")
             df.rename(columns={feat.name: 'feature'}, inplace=True)
             output = df.to_csv(index=False, columns=['dates', 'feature'])
         return StreamingResponse(iter([output]),
-                                media_type='text/csv',
-                                headers={"Content-Disposition":
-                                        "attachment;filename=<VUMT_feature>.csv",
-                                        'Content-Length': str(len(output))})
-
+                                 media_type='text/csv',
+                                 headers={"Content-Disposition":
+                                          "attachment;filename=<tonik_feature>.csv",
+                                          'Content-Length': str(len(output))})
 
     def aggregate_feature(self, resolution, verticalres, feat, nfreqs, dates):
-        resolution = np.timedelta64(pd.Timedelta(resolution), 'ms').astype(float)
+        resolution = np.timedelta64(
+            pd.Timedelta(resolution), 'ms').astype(float)
         ndays = np.timedelta64(dates[-1] - dates[0], 'ms').astype(float)
-        canvas_x =  int(ndays/resolution)
+        canvas_x = int(ndays/resolution)
         canvas_y = min(nfreqs, verticalres)
         dates = date2num(dates.astype('datetime64[us]').astype(datetime),
-                                units='hours since 1970-01-01 00:00:00.0',
-                                calendar='gregorian')
+                         units='hours since 1970-01-01 00:00:00.0',
+                         calendar='gregorian')
         feat = feat.assign_coords({'datetime': dates})
         cvs = dsh.Canvas(plot_width=canvas_x,
-                                plot_height=canvas_y)
+                         plot_height=canvas_y)
         agg = cvs.raster(source=feat)
         freq_dim = feat.dims[0]
         freq, d, spec = agg.coords[freq_dim].values, agg.coords['datetime'].values, agg.data
-        dates = num2date(d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
-        return freq,dates,spec
+        dates = num2date(
+            d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
+        return freq, dates, spec
 
     def inventory(self, group: str) -> dict:
         sg = StorageGroup(group, rootdir=self.rootdir)
@@ -133,12 +143,14 @@ class TonikAPI:
 
 # ta = TonikAPI('/tmp').feature()
 
+
 def main(argv=None):
     parser = ArgumentParser()
     parser.add_argument("--rootdir", default='/tmp')
     args = parser.parse_args(argv)
     ta = TonikAPI(args.rootdir)
     uvicorn.run(ta.app, host="0.0.0.0", port=8003)
+
 
 if __name__ == "__main__":
     main()
