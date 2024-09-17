@@ -18,13 +18,14 @@ ERROR_LOG_FILENAME = "tonik.log"
 LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {      
+    "formatters": {
         "default": {  # The formatter name, it can be anything that I wish
-            "format": "%(asctime)s:%(name)s:%(process)d:%(lineno)d " "%(levelname)s %(message)s",  #  What to add in the message
+            # What to add in the message
+            "format": "%(asctime)s:%(name)s:%(process)d:%(lineno)d " "%(levelname)s %(message)s",
             "datefmt": "%Y-%m-%d %H:%M:%S",  # How to display dates
         },
         "json": {  # The formatter name
-         "()": "pythonjsonlogger.jsonlogger.JsonFormatter",  # The class to instantiate!
+            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",  # The class to instantiate!
             # Json is more complex, but easier to read, display all attributes!
             "format": """
                     asctime: %(asctime)s
@@ -48,22 +49,23 @@ LOGGING_CONFIG = {
                 """,
             "datefmt": "%Y-%m-%d %H:%M:%S",  # How to display dates
         },
-    }, 
+    },
     "handlers": {
         "logfile": {  # The handler name
             "formatter": "json",  # Refer to the formatter defined above
             "level": "ERROR",  # FILTER: Only ERROR and CRITICAL logs
             "class": "logging.handlers.RotatingFileHandler",  # OUTPUT: Which class to use
-            "filename": ERROR_LOG_FILENAME,  # Param for class above. Defines filename to use, load it from constant
+            # Param for class above. Defines filename to use, load it from constant
+            "filename": ERROR_LOG_FILENAME,
             "backupCount": 2,  # Param for class above. Defines how many log files to keep as it grows
-        }, 
+        },
         "simple": {  # The handler name
             "formatter": "default",  # Refer to the formatter defined above
             "class": "logging.StreamHandler",  # OUTPUT: Same as above, stream to console
             "stream": "ext://sys.stdout",
         },
     },
-    "loggers": { 
+    "loggers": {
         "zizou": {  # The name of the logger, this SHOULD match your module!
             "level": "DEBUG",  # FILTER: only INFO logs onwards from "tryceratops" logger
             "handlers": [
@@ -92,10 +94,10 @@ class Path(object):
         except FileExistsError:
             pass
         self.children = {}
-    
+
     def __str__(self):
         return self.path
-    
+
     def __getitem__(self, key):
         if key is None:
             raise ValueError("Key cannot be None")
@@ -125,18 +127,18 @@ class Path(object):
         if self.endtime <= self.starttime:
             raise ValueError('Startime has to be smaller than endtime.')
 
-        feature = feature.lower()
         filename = self.feature_path(feature)
 
-        logger.debug(f"Reading feature {feature} between {self.starttime} and {self.endtime}")
+        logger.debug(
+            f"Reading feature {feature} between {self.starttime} and {self.endtime}")
         num_periods = None
         if stack_length is not None:
             valid_stack_units = ['W', 'D', 'h', 'T', 'min', 'S']
             if not re.match(r'\d*\s*(\w*)', stack_length).group(1)\
-                   in valid_stack_units:
+                    in valid_stack_units:
                 raise ValueError(
                     'Stack length should be one of: {}'.
-                        format(', '.join(valid_stack_units))
+                    format(', '.join(valid_stack_units))
                 )
 
             if pd.to_timedelta(stack_length) < pd.to_timedelta(interval):
@@ -146,13 +148,13 @@ class Path(object):
             # Rewind starttime to account for stack length
             self.starttime -= pd.to_timedelta(stack_length)
 
-            num_periods = (pd.to_timedelta(stack_length)/
+            num_periods = (pd.to_timedelta(stack_length) /
                            pd.to_timedelta(interval))
             if not num_periods.is_integer():
                 raise ValueError(
                     'Stack length {} / interval {} = {}, but it needs'
                     ' to be a whole number'.
-                        format(stack_length, interval, num_periods))
+                    format(stack_length, interval, num_periods))
 
         xd_index = dict(datetime=slice(self.starttime, self.endtime))
         with xr.open_dataset(filename, group='original', engine='h5netcdf') as ds:
@@ -164,8 +166,8 @@ class Path(object):
             logger.debug("Stacking feature...")
             try:
                 xdf = rq[feature].rolling(datetime=int(num_periods),
-                                        center=False,
-                                        min_periods=1).mean()
+                                          center=False,
+                                          min_periods=1).mean()
                 # Return requested timeframe to that defined in initialisation
                 self.starttime += pd.to_timedelta(stack_length)
                 xdf_new = xdf.loc[self.starttime:self.endtime]
@@ -212,12 +214,13 @@ class StorageGroup(Path):
     >>> c = g.channel(site='WIZ', sensor='00', channel='HHZ')
     >>> rsam = c("rsam")
     """
+
     def __init__(self, name, rootdir=None, starttime=None, endtime=None):
-        self.stores = set() 
+        self.stores = set()
         self.starttime = starttime
         self.endtime = endtime
         super().__init__(name, rootdir)
-    
+
     def print_tree(self, site, indent=0, output=''):
         output += ' ' * indent + site.path + '\n'
         for site in site.children.values():
@@ -243,7 +246,7 @@ class StorageGroup(Path):
         st.starttime = self.starttime
         st.endtime = self.endtime
         self.stores.add(st)
-        return st 
+        return st
 
     def from_directory(self):
         """
@@ -311,7 +314,5 @@ class StorageGroup(Path):
             if s is not self:
                 s.endtime = time
 
-
     starttime = property(get_starttime, set_starttime)
     endtime = property(get_endtime, set_endtime)
-
