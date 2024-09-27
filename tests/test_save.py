@@ -102,3 +102,62 @@ def test_xarray2hdf5_multi_access(tmp_path_factory):
     xdf_dummy = xr.open_dataset(os.path.join(temp_dir, 'rsam.nc'),
                                 group='original', engine='h5netcdf')
     xarray2hdf5(xdf2, temp_dir)
+
+
+def test_xarray2zarr(tmp_path_factory):
+    xdf = generate_test_data(dim=2, ndays=3)
+    temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=datetime.fromisoformat(xdf.attrs['starttime']),
+                endtime=datetime.fromisoformat(xdf.attrs['endtime']),
+                backend='zarr')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf)
+
+    xdf_test = c('ssam')
+    np.testing.assert_array_equal(xdf['ssam'].values,
+                                  xdf_test.values)
+    np.testing.assert_array_equal(xdf['frequency'].values,
+                                  np.squeeze(xdf_test['frequency'].values))
+    # minor differences can occur on the level of nanoseconds; ensure
+    # differences are less than 1 microsecond
+    dt = np.abs((xdf_test['datetime'].values - xdf['datetime'].values)).max()
+    assert dt < np.timedelta64(1, 'us')
+
+
+def test_xarray2zarr_with_gaps(tmp_path_factory):
+    """
+    Test writing xarray data to zarr with gaps.
+    """
+    temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
+    start = datetime(2022, 7, 18, 8, 0, 0)
+    end = datetime(2022, 7, 19, 12, 0, 0)
+    xdf1 = generate_test_data(dim=1, ndays=1, tstart=start)
+    xdf2 = generate_test_data(dim=1, ndays=1, tstart=end)
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=start, endtime=end + timedelta(days=1),
+                backend='zarr')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf1)
+    c.save(xdf2)
+    xdf_test = c('rsam')
+    assert xdf_test.isnull().sum() == 21
+
+
+def test_xarray2zarr_outofsequence(tmp_path_factory):
+    """
+    Test writing xarray data to zarr where the later part is written first.
+    """
+    temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
+    start = datetime(2022, 7, 18, 8, 0, 0)
+    end = datetime(2022, 7, 19, 12, 0, 0)
+    xdf1 = generate_test_data(dim=1, ndays=1, tstart=start)
+    xdf2 = generate_test_data(dim=1, ndays=1, tstart=end)
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=start, endtime=end + timedelta(days=1),
+                backend='zarr')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf2)
+    c.save(xdf1)
+    xdf_test = c('rsam')
+    assert xdf_test.isnull().sum() == 21

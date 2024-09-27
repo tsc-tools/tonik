@@ -13,8 +13,6 @@ import xarray as xr
 from .xarray2hdf5 import xarray2hdf5
 
 
-ERROR_LOG_FILENAME = "tonik.log"
-
 LOGGING_CONFIG = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -51,14 +49,6 @@ LOGGING_CONFIG = {
         },
     },
     "handlers": {
-        "logfile": {  # The handler name
-            "formatter": "json",  # Refer to the formatter defined above
-            "level": "ERROR",  # FILTER: Only ERROR and CRITICAL logs
-            "class": "logging.handlers.RotatingFileHandler",  # OUTPUT: Which class to use
-            # Param for class above. Defines filename to use, load it from constant
-            "filename": ERROR_LOG_FILENAME,
-            "backupCount": 2,  # Param for class above. Defines how many log files to keep as it grows
-        },
         "simple": {  # The handler name
             "formatter": "default",  # Refer to the formatter defined above
             "class": "logging.StreamHandler",  # OUTPUT: Same as above, stream to console
@@ -66,7 +56,7 @@ LOGGING_CONFIG = {
         },
     },
     "loggers": {
-        "zizou": {  # The name of the logger, this SHOULD match your module!
+        "storage": {  # The name of the logger, this SHOULD match your module!
             "level": "DEBUG",  # FILTER: only INFO logs onwards from "tryceratops" logger
             "handlers": [
                 "simple",  # Refer the handler defined above
@@ -74,9 +64,9 @@ LOGGING_CONFIG = {
         },
     },
     "root": {
-        "level": "ERROR",  # FILTER: only INFO logs onwards
+        "level": "INFO",  # FILTER: only INFO logs onwards
         "handlers": [
-            "logfile",  # Refer the handler defined above
+            "simple",  # Refer the handler defined above
         ]
     },
 }
@@ -86,13 +76,19 @@ logger = logging.getLogger("__name__")
 
 
 class Path(object):
-    def __init__(self, name, parentdir):
+    def __init__(self, name, parentdir, create=True, backend='h5netcdf'):
         self.name = name
+        self.create = create
+        self.backend = backend
         self.path = os.path.join(parentdir, name)
-        try:
-            os.makedirs(self.path, exist_ok=True)
-        except FileExistsError:
-            pass
+        if create:
+            try:
+                os.makedirs(self.path, exist_ok=True)
+            except FileExistsError:
+                pass
+        else:
+            if not os.path.exists(self.path):
+                raise FileNotFoundError(f"Path {self.path} not found")
         self.children = {}
 
     def __str__(self):
@@ -104,14 +100,20 @@ class Path(object):
         try:
             return self.children[key]
         except KeyError:
-            self.children[key] = Path(key, self.path)
+            self.children[key] = Path(
+                key, self.path, self.create, self.backend)
             return self.children[key]
 
     def feature_path(self, feature):
-        _feature_path = os.path.join(self.path, feature + ".nc")
+
+        if self.backend == 'h5netcdf':
+            file_ending = '.nc'
+        elif self.backend == 'zarr':
+            file_ending = '.zarr'
+        _feature_path = os.path.join(self.path, feature + file_ending)
         if not os.path.exists(_feature_path):
             raise FileNotFoundError(f"File {_feature_path} not found")
-        self.children[feature] = Path(feature + ".nc", self.path)
+            self.children[feature] = Path(feature + file_ending, self.path)
         return _feature_path
 
     def __call__(self, feature, stack_length=None, interval='10min'):
@@ -157,9 +159,12 @@ class Path(object):
                     format(stack_length, interval, num_periods))
 
         xd_index = dict(datetime=slice(self.starttime, self.endtime))
-        with xr.open_dataset(filename, group='original', engine='h5netcdf') as ds:
-            ds.sortby("datetime")
-            rq = ds.loc[xd_index].load()
+        with xr.open_dataset(filename, group='original', engine=self.backend) as ds:
+            try:
+                rq = ds.loc[xd_index].load()
+            except KeyError as e:
+                ds = ds.sortby("datetime")
+                rq = ds.loc[xd_index].load()
 
         # Stack features
         if stack_length is not None:
@@ -191,10 +196,20 @@ class Path(object):
         """
         Save a feature to disk
         """
-        xarray2hdf5(data, self.path, **kwargs)
+        if self.backend == 'h5netcdf':
+            xarray2hdf5(data, self.path, **kwargs)
+        elif self.backend == 'zarr':
+            for feature in data.data_vars.keys():
+                fout = os.path.join(self.path, feature + '.zarr')
+                if not os.path.exists(fout):
+                    data[feature].to_zarr(
+                        fout, group='original')
+                else:
+                    data[feature].to_zarr(
+                        fout, group='original', append_dim='datetime')
 
 
-class StorageGroup(Path):
+class Storage(Path):
     """
     Query computed features
 
@@ -206,7 +221,7 @@ class StorageGroup(Path):
     :type endtime: :class:`datetime.datetime`
 
     >>> import datetime
-    >>> g = Group('Whakaari')
+    >>> g = Storage('Whakaari', /tmp)
     >>> start = datetime.datetime(2012,1,1,0,0,0)
     >>> end = datetime.datetime(2012,1,2,23,59,59)
     >>> g.starttime = start
@@ -215,11 +230,11 @@ class StorageGroup(Path):
     >>> rsam = c("rsam")
     """
 
-    def __init__(self, name, rootdir=None, starttime=None, endtime=None):
+    def __init__(self, name, rootdir, starttime=None, endtime=None, create=True, backend='h5netcdf'):
         self.stores = set()
         self.starttime = starttime
         self.endtime = endtime
-        super().__init__(name, rootdir)
+        super().__init__(name, rootdir, create, backend)
 
     def print_tree(self, site, indent=0, output=''):
         output += ' ' * indent + site.path + '\n'
@@ -232,7 +247,7 @@ class StorageGroup(Path):
         rstr = self.print_tree(self, 0, rstr)
         return rstr
 
-    def get_store(self, *args):
+    def get_substore(self, *args):
         # return the store for a given site, sensor, or channel
         # if one of them is None return the store for the level above
         # if all are None return the root store
@@ -257,10 +272,10 @@ class StorageGroup(Path):
                 try:
                     subdirs = root.split(self.path)[1].split(os.sep)[1:]
                 except IndexError:
-                    st = self.get_store()
+                    st = self.get_substore()
                 else:
                     try:
-                        st = self.get_store(*subdirs)
+                        st = self.get_substore(*subdirs)
                     except TypeError as e:
                         raise e
                 for _f in files:
@@ -271,7 +286,7 @@ class StorageGroup(Path):
     def directory_tree_to_dict(path):
         name = os.path.basename(path)
         if os.path.isdir(path):
-            return {name: [StorageGroup.directory_tree_to_dict(os.path.join(path, child)) for child in sorted(os.listdir(path))]}
+            return {name: [Storage.directory_tree_to_dict(os.path.join(path, child)) for child in sorted(os.listdir(path))]}
         else:
             if path.endswith('.nc'):
                 return name.replace('.nc', '')
@@ -280,7 +295,7 @@ class StorageGroup(Path):
         """
         Convert the storage group to json
         """
-        return StorageGroup.directory_tree_to_dict(self.path)
+        return Storage.directory_tree_to_dict(self.path)
 
     def get_starttime(self):
         return self.__starttime
