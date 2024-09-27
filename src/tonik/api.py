@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Annotated
 
-from .storage import StorageGroup
+from .storage import Storage
 from . import get_data
 
 logger = logging.getLogger(__name__)
@@ -66,12 +66,12 @@ class TonikAPI:
                 subdir: Annotated[list[str] | None, Query()] = None):
         _st = self.preprocess_datetime(starttime)
         _et = self.preprocess_datetime(endtime)
-        g = StorageGroup(group, rootdir=self.rootdir,
-                         starttime=_st, endtime=_et)
+        g = Storage(group, rootdir=self.rootdir,
+                    starttime=_st, endtime=_et)
         if subdir is None:
             c = g
         else:
-            c = g.get_store(*subdir)
+            c = g.get_substore(*subdir)
         try:
             feat = c(name)
         except ValueError as e:
@@ -137,11 +137,21 @@ class TonikAPI:
             d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
         return freq, dates, spec
 
-    def inventory(self, group: str) -> dict:
-        sg = StorageGroup(group, rootdir=self.rootdir)
-        return sg.to_dict()
-
-# ta = TonikAPI('/tmp').feature()
+    def inventory(self, group: str, subdir: Annotated[list[str] | None, Query()] = None, tree: bool = True) -> list | dict:
+        sg = Storage(group, rootdir=self.rootdir, create=False)
+        try:
+            c = sg.get_substore(*subdir)
+        except TypeError:
+            c = sg
+        except FileNotFoundError as e:
+            msg = "Directory {} not found.".format(
+                '/'.join([sg.path] + subdir))
+            raise HTTPException(status_code=404, detail=msg)
+        if tree and not subdir:
+            return sg.to_dict()
+        else:
+            dir_contents = os.listdir(c.path)
+            return [fn.replace('.nc', '') for fn in dir_contents]
 
 
 def main(argv=None):

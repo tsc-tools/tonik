@@ -28,6 +28,13 @@ def test_errors(setup_api):
         txt = r.text
     assert r.status_code == 422
 
+    params = dict(group='volcanoes',
+                  subdir=['this', 'doesnt', 'exist'])
+    with client.stream("GET", "/inventory", params=params) as r:
+        r.read()
+        txt = r.text
+    assert r.status_code == 404
+
 
 def test_read_1Dfeature(setup_api):
     client, l = setup_api
@@ -205,3 +212,17 @@ def test_inventory(setup_api):
     result_test = json.loads(txt)
     test_features = result_test['volcanoes'][1]['MDR'][0]['00'][0]['BHZ']
     assert sorted(test_features) == features
+
+    params = dict(group='volcanoes', tree=False)
+    with client.stream("GET", "/inventory", params=params) as r:
+        r.read()
+        txt = r.text
+    result_test = json.loads(txt)
+    assert sorted(result_test) == sorted(['MAVZ', 'WIZ', 'MDR', 'MMS'])
+
+    params = dict(group='volcanoes', subdir=['MDR', '00', 'BHZ'])
+    with client.stream("GET", "/inventory", params=params) as r:
+        r.read()
+        txt = r.text
+    result_test = json.loads(txt)
+    assert sorted(test_features) == sorted(result_test)
