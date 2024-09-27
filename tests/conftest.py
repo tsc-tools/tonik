@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 import xarray as xr
 
-from tonik import StorageGroup, generate_test_data
+from tonik import Storage, generate_test_data
 
 
 def pytest_addoption(parser):
@@ -31,8 +31,9 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_slow)
 
 
-tstart = datetime(2023,1,1,0,0,0)
+tstart = datetime(2023, 1, 1, 0, 0, 0)
 ndays = 10
+
 
 @pytest.fixture(scope='package')
 def setup(tmp_path_factory):
@@ -47,16 +48,16 @@ def setup(tmp_path_factory):
                   ('filterbank', 'fbfrequency')]
 
     savedir = tmp_path_factory.mktemp('vumt_test_tmp', numbered=True)
-    g = StorageGroup('volcanoes', rootdir=savedir)
-    c1 = g.get_store('WIZ', '00', 'HHZ')
-    c2 = g.get_store('MDR', '00', 'BHZ')
-    c3 = g.get_store('MAVZ', '10', 'EHZ')
-    c4 = g.get_store('MMS', '66', 'BHZ')
+    g = Storage('volcanoes', rootdir=savedir)
+    c1 = g.get_substore('WIZ', '00', 'HHZ')
+    c2 = g.get_substore('MDR', '00', 'BHZ')
+    c3 = g.get_substore('MAVZ', '10', 'EHZ')
+    c4 = g.get_substore('MMS', '66', 'BHZ')
     # Generate some fake data
     for _f in features1D:
         feat = generate_test_data(tstart=tstart,
-                                    feature_name=_f,
-                                    ndays=ndays)
+                                  feature_name=_f,
+                                  ndays=ndays)
         for _c in g.stores:
             _c.save(feat)
     for _n, _f in features2D:
@@ -76,15 +77,15 @@ def setup(tmp_path_factory):
                              freq_name='cluster',
                              dim=2)
     c2.save(alg)
-    return savedir, g 
+    return savedir, g
 
 
 @pytest.fixture(scope='module')
 def setup_api(setup):
     savedir, g = setup
     from tonik.api import TonikAPI
-    ta = TonikAPI(str(savedir)) 
+    ta = TonikAPI(str(savedir))
     client = TestClient(ta.app)
     g.starttime = datetime(2023, 1, 1)
     g.endtime = datetime(2023, 1, 6)
-    return client, g.get_store('MDR', '00', 'BHZ') 
+    return client, g.get_substore('MDR', '00', 'BHZ')

@@ -2,7 +2,7 @@ import importlib
 from os import PathLike
 from typing import Optional
 
-from .storage import StorageGroup, Path 
+from .storage import Storage, Path
 from .utils import generate_test_data
 
 
