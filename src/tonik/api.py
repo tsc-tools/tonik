@@ -151,7 +151,7 @@ class TonikAPI:
             return sg.to_dict()
         else:
             dir_contents = os.listdir(c.path)
-            return [fn.replace('.nc', '') for fn in dir_contents]
+            return [fn.replace('.nc', '').replace('.zarr', '') for fn in dir_contents]
 
 
 def main(argv=None):

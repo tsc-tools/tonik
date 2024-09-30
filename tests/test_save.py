@@ -1,12 +1,11 @@
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
 
 import numpy as np
-import pandas as pd
 import pytest
 import xarray as xr
 
-from tonik import generate_test_data, Storage
+from tonik import Storage, generate_test_data
 from tonik.xarray2hdf5 import xarray2hdf5
 
 
@@ -39,7 +38,8 @@ def test_xarray2hdf5_archive_starttime(tmp_path_factory):
     temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime(2000, 1, 1),
-                endtime=datetime.fromisoformat(xdf.attrs['endtime']))
+                endtime=datetime.fromisoformat(xdf.attrs['endtime']),
+                backend='h5netcdf')
     c = g.get_substore('MDR', '00', 'HHZ')
     c.save(xdf, archive_starttime=datetime(2022, 1, 1))
 
@@ -57,7 +57,8 @@ def test_xarray2hdf5_resolution(tmp_path_factory):
     temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime(2000, 1, 1),
-                endtime=datetime.fromisoformat(xdf.attrs['endtime']))
+                endtime=datetime.fromisoformat(xdf.attrs['endtime']),
+                backend='h5netcdf')
     c = g.get_substore('MDR', '00', 'HHZ')
     c.save(xdf, resolution=0.1, archive_starttime=datetime(2022, 7, 18))
 
@@ -129,7 +130,7 @@ def test_xarray2zarr_with_gaps(tmp_path_factory):
     """
     Test writing xarray data to zarr with gaps.
     """
-    temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
+    temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
     start = datetime(2022, 7, 18, 8, 0, 0)
     end = datetime(2022, 7, 19, 12, 0, 0)
     xdf1 = generate_test_data(dim=1, ndays=1, tstart=start)
@@ -148,7 +149,7 @@ def test_xarray2zarr_outofsequence(tmp_path_factory):
     """
     Test writing xarray data to zarr where the later part is written first.
     """
-    temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
+    temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
     start = datetime(2022, 7, 18, 8, 0, 0)
     end = datetime(2022, 7, 19, 12, 0, 0)
     xdf1 = generate_test_data(dim=1, ndays=1, tstart=start)
@@ -161,3 +162,45 @@ def test_xarray2zarr_outofsequence(tmp_path_factory):
     c.save(xdf1)
     xdf_test = c('rsam')
     assert xdf_test.isnull().sum() == 21
+
+
+def test_xarray2zarr_with_overlaps(tmp_path_factory):
+    temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
+    start = datetime(2022, 7, 18, 8, 0, 0)
+    end = datetime(2022, 7, 18, 9, 0, 0)
+    xdf1 = generate_test_data(dim=1, intervals=3, freq='1h', tstart=start)
+    xdf2 = generate_test_data(dim=1, intervals=3, freq='1h', tstart=end)
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=start, endtime=end + timedelta(days=1),
+                backend='zarr')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf1)
+    c.save(xdf2)
+    xdf_test = c('rsam')
+    assert xdf_test.isel(datetime=0).values == xdf1.rsam.isel(
+        datetime=0).values
+    assert xdf_test.isel(datetime=1).values == xdf2.rsam.isel(
+        datetime=0).values
+    assert xdf_test.datetime.values[-1] == xdf2.datetime.values[-1]
+
+
+def test_xarray2zarr_overwrite(tmp_path_factory):
+    temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
+    start = datetime(2022, 7, 18, 8, 0, 0)
+    xdf1 = generate_test_data(dim=1, intervals=3, freq='1h', tstart=start)
+    xdf2 = generate_test_data(dim=1, intervals=3, freq='1h', tstart=start,
+                              seed=43)
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=start, endtime=start + timedelta(days=1),
+                backend='zarr')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf1)
+    c.save(xdf2)
+    xdf_test = c('rsam')
+    np.testing.assert_array_equal(
+        xdf_test.values, xdf2.rsam.values)
+    with pytest.raises(AssertionError):
+        np.testing.assert_array_equal(
+            xdf_test.values, xdf1.rsam.values)
+    np.testing.assert_array_equal(
+        xdf_test.datetime.values, xdf1.datetime.values)

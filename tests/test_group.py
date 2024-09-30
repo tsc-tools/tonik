@@ -13,7 +13,7 @@ from tonik.utils import generate_test_data
 
 def test_group(tmp_path_factory):
     rootdir = tmp_path_factory.mktemp('data')
-    g = Storage('test_experiment', rootdir)
+    g = Storage('test_experiment', rootdir, backend='h5netcdf')
     c = g.get_substore('site1', 'sensor1', 'channel1')
     assert c.path == os.path.join(
         rootdir, 'test_experiment/site1/sensor1/channel1')
@@ -41,7 +41,7 @@ def test_non_existant_feature(tmp_path_factory):
 
 def test_from_directory(tmp_path_factory):
     rootdir = tmp_path_factory.mktemp('data')
-    g = Storage('test_experiment', rootdir)
+    g = Storage('test_experiment', rootdir, backend='h5netcdf')
     c = g.get_substore('site1', 'sensor1', 'channel1')
     assert c.path == os.path.join(rootdir, 'test_experiment', 'site1',
                                   'sensor1', 'channel1')

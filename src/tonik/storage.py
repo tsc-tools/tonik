@@ -1,17 +1,13 @@
-from datetime import datetime, timedelta
-import json
-import glob
 import logging
 import logging.config
 import os
 import re
-import tempfile
 
 import pandas as pd
 import xarray as xr
 
 from .xarray2hdf5 import xarray2hdf5
-
+from .xarray2zarr import xarray2zarr
 
 LOGGING_CONFIG = {
     "version": 1,
@@ -76,7 +72,7 @@ logger = logging.getLogger("__name__")
 
 
 class Path(object):
-    def __init__(self, name, parentdir, create=True, backend='h5netcdf'):
+    def __init__(self, name, parentdir, create=True, backend='zarr'):
         self.name = name
         self.create = create
         self.backend = backend
@@ -136,8 +132,7 @@ class Path(object):
         num_periods = None
         if stack_length is not None:
             valid_stack_units = ['W', 'D', 'h', 'T', 'min', 'S']
-            if not re.match(r'\d*\s*(\w*)', stack_length).group(1)\
-                    in valid_stack_units:
+            if re.match(r'\d*\s*(\w*)', stack_length).group(1) not in valid_stack_units:
                 raise ValueError(
                     'Stack length should be one of: {}'.
                     format(', '.join(valid_stack_units))
@@ -162,7 +157,7 @@ class Path(object):
         with xr.open_dataset(filename, group='original', engine=self.backend) as ds:
             try:
                 rq = ds.loc[xd_index].load()
-            except KeyError as e:
+            except KeyError:
                 ds = ds.sortby("datetime")
                 rq = ds.loc[xd_index].load()
 
@@ -199,14 +194,7 @@ class Path(object):
         if self.backend == 'h5netcdf':
             xarray2hdf5(data, self.path, **kwargs)
         elif self.backend == 'zarr':
-            for feature in data.data_vars.keys():
-                fout = os.path.join(self.path, feature + '.zarr')
-                if not os.path.exists(fout):
-                    data[feature].to_zarr(
-                        fout, group='original')
-                else:
-                    data[feature].to_zarr(
-                        fout, group='original', append_dim='datetime')
+            xarray2zarr(data, self.path, **kwargs)
 
 
 class Storage(Path):
@@ -230,7 +218,7 @@ class Storage(Path):
     >>> rsam = c("rsam")
     """
 
-    def __init__(self, name, rootdir, starttime=None, endtime=None, create=True, backend='h5netcdf'):
+    def __init__(self, name, rootdir, starttime=None, endtime=None, create=True, backend='zarr'):
         self.stores = set()
         self.starttime = starttime
         self.endtime = endtime
@@ -280,16 +268,21 @@ class Storage(Path):
                         raise e
                 for _f in files:
                     if _f.endswith('.nc'):
-                        st.feature_path(_f.replace('.nc', ''))
+                        st.feature_path(_f.replace(
+                            '.nc', '').replace('.zarr', ''))
 
     @staticmethod
     def directory_tree_to_dict(path):
         name = os.path.basename(path)
-        if os.path.isdir(path):
+        if name.endswith('.zarr'):
+            return name.replace('.zarr', '')
+        elif os.path.isdir(path):
             return {name: [Storage.directory_tree_to_dict(os.path.join(path, child)) for child in sorted(os.listdir(path))]}
         else:
-            if path.endswith('.nc'):
+            if name.endswith('.nc'):
                 return name.replace('.nc', '')
+            else:
+                return
 
     def to_dict(self):
         """
