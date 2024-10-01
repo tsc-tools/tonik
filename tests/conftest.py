@@ -1,12 +1,7 @@
-from datetime import datetime, timedelta
-import inspect
-import os
+from datetime import datetime
 
-import numpy as np
-import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
-import xarray as xr
 
 from tonik import Storage, generate_test_data
 
@@ -56,25 +51,25 @@ def setup(tmp_path_factory):
     # Generate some fake data
     for _f in features1D:
         feat = generate_test_data(tstart=tstart,
-                                  feature_name=_f,
+                                  feature_names=[_f],
                                   ndays=ndays)
         for _c in g.stores:
             _c.save(feat)
     for _n, _f in features2D:
         feat = generate_test_data(tstart=tstart,
-                                  feature_name=_n,
+                                  feature_names=[_n],
                                   ndays=ndays,
                                   nfreqs=8,
-                                  freq_name=_f,
+                                  freq_names=[_f],
                                   dim=2)
         for _c in g.stores:
             _c.save(feat)
 
     alg = generate_test_data(tstart=tstart,
-                             feature_name='autoencoder',
+                             feature_names=['autoencoder'],
                              ndays=ndays,
                              nfreqs=5,
-                             freq_name='cluster',
+                             freq_names=['cluster'],
                              dim=2)
     c2.save(alg)
     return savedir, g
