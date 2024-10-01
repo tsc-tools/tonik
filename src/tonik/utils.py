@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -6,7 +6,7 @@ import xarray as xr
 
 
 def generate_test_data(dim=1, ndays=30, nfreqs=10,
-                       tstart=datetime.now(timezone.utc),
+                       tstart=datetime.now(),
                        freq='10min', intervals=None,
                        feature_name=None, seed=42,
                        freq_name=None, add_nans=True):

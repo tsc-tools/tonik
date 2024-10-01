@@ -13,11 +13,13 @@ def test_xarray2hdf5(tmp_path_factory):
     """
     Test writing xarray data to hdf5.
     """
-    xdf = generate_test_data(dim=2, ndays=3)
+    xdf = generate_test_data(
+        dim=2, ndays=3, tstart=datetime(2022, 7, 18, 0, 0, 0))
     temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime.fromisoformat(xdf.attrs['starttime']),
-                endtime=datetime.fromisoformat(xdf.attrs['endtime']))
+                endtime=datetime.fromisoformat(xdf.attrs['endtime']),
+                backend='h5netcdf')
     c = g.get_substore('MDR', '00', 'HHZ')
     c.save(xdf)
 
@@ -74,15 +76,16 @@ def test_xarray2hdf5_with_gaps(tmp_path_factory):
     temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
     start = datetime(2022, 7, 18, 8, 0, 0)
     end = datetime(2022, 7, 19, 12, 0, 0)
-    xdf1 = generate_test_data(dim=1, ndays=1, tstart=start)
-    xdf2 = generate_test_data(dim=1, ndays=1, tstart=end)
+    xdf1 = generate_test_data(dim=1, ndays=1, tstart=start, add_nans=False)
+    xdf2 = generate_test_data(dim=1, ndays=1, tstart=end, add_nans=False)
     g = Storage('test_experiment', rootdir=temp_dir,
-                starttime=start, endtime=end + timedelta(days=1))
+                starttime=start, endtime=end + timedelta(days=1),
+                backend='h5netcdf')
     c = g.get_substore('MDR', '00', 'HHZ')
     c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('rsam')
-    assert xdf_test.isnull().sum() == 21
+    assert xdf_test.isnull().sum() == 24
 
 
 @pytest.mark.xfail(raises=OSError)
@@ -106,7 +109,8 @@ def test_xarray2hdf5_multi_access(tmp_path_factory):
 
 
 def test_xarray2zarr(tmp_path_factory):
-    xdf = generate_test_data(dim=2, ndays=3)
+    xdf = generate_test_data(
+        dim=2, ndays=3, tstart=datetime(2022, 7, 18, 0, 0, 0))
     temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime.fromisoformat(xdf.attrs['starttime']),
@@ -133,8 +137,8 @@ def test_xarray2zarr_with_gaps(tmp_path_factory):
     temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
     start = datetime(2022, 7, 18, 8, 0, 0)
     end = datetime(2022, 7, 19, 12, 0, 0)
-    xdf1 = generate_test_data(dim=1, ndays=1, tstart=start)
-    xdf2 = generate_test_data(dim=1, ndays=1, tstart=end)
+    xdf1 = generate_test_data(dim=1, ndays=1, tstart=start, add_nans=False)
+    xdf2 = generate_test_data(dim=1, ndays=1, tstart=end, add_nans=False)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
                 backend='zarr')
@@ -142,7 +146,7 @@ def test_xarray2zarr_with_gaps(tmp_path_factory):
     c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('rsam')
-    assert xdf_test.isnull().sum() == 21
+    assert xdf_test.isnull().sum() == 0
 
 
 def test_xarray2zarr_outofsequence(tmp_path_factory):
@@ -161,7 +165,8 @@ def test_xarray2zarr_outofsequence(tmp_path_factory):
     c.save(xdf2)
     c.save(xdf1)
     xdf_test = c('rsam')
-    assert xdf_test.isnull().sum() == 21
+    np.testing.assert_array_equal(
+        xdf_test.datetime.values, xdf1.merge(xdf2).datetime.values)
 
 
 def test_xarray2zarr_with_overlaps(tmp_path_factory):

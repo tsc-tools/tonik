@@ -3,7 +3,7 @@ import os
 import xarray as xr
 
 
-def xarray2zarr(xds, path, mode='w'):
+def xarray2zarr(xds, path, mode='a'):
     for feature in xds.data_vars.keys():
         fout = os.path.join(path, feature + '.zarr')
         if not os.path.exists(fout) or mode == 'w':
