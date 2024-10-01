@@ -119,14 +119,20 @@ def test_xarray2zarr(tmp_path_factory):
     c = g.get_substore('MDR', '00', 'HHZ')
     c.save(xdf)
 
-    xdf_test = c('ssam')
+    xdf_test_ssam = c('ssam')
+    xdf_test_fb = c('filterbank')
     np.testing.assert_array_equal(xdf['ssam'].values,
-                                  xdf_test.values)
+                                  xdf_test_ssam.values)
     np.testing.assert_array_equal(xdf['frequency'].values,
-                                  np.squeeze(xdf_test['frequency'].values))
+                                  np.squeeze(xdf_test_ssam['frequency'].values))
+    np.testing.assert_array_equal(xdf['filterbank'].values,
+                                  xdf_test_fb.values)
+    np.testing.assert_array_equal(xdf['fbfrequency'].values,
+                                  np.squeeze(xdf_test_fb['fbfrequency'].values))
     # minor differences can occur on the level of nanoseconds; ensure
     # differences are less than 1 microsecond
-    dt = np.abs((xdf_test['datetime'].values - xdf['datetime'].values)).max()
+    dt = np.abs((xdf_test_ssam['datetime'].values -
+                xdf['datetime'].values)).max()
     assert dt < np.timedelta64(1, 'us')
 
 
@@ -169,7 +175,32 @@ def test_xarray2zarr_outofsequence(tmp_path_factory):
         xdf_test.datetime.values, xdf1.merge(xdf2).datetime.values)
 
 
-def test_xarray2zarr_with_overlaps(tmp_path_factory):
+def test_xarray2zarr_duplicates(tmp_path_factory):
+    """
+    Test writing xarray data to zarr where the later part is written first.
+    """
+    temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
+    start = datetime(2022, 7, 18, 8, 0, 0)
+    end = datetime(2022, 7, 19, 12, 0, 0)
+    xdf1 = generate_test_data(dim=1, ndays=1, tstart=start)
+    duplicate_data = xdf1.isel(datetime=-1)
+    xdf1 = xr.concat([xdf1, duplicate_data], dim='datetime')
+    xdf2 = generate_test_data(dim=1, ndays=1, tstart=end)
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=start, endtime=end + timedelta(days=1),
+                backend='zarr')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf1)
+    c.save(xdf2)
+    xdf_test = c('rsam')
+    np.testing.assert_array_equal(
+        xdf_test.datetime.values, xdf1.drop_duplicates('datetime', keep='first').merge(xdf2).datetime.values)
+
+
+def test_xarray2zarr_with_overlaps_1D(tmp_path_factory):
+    """
+    Test writing xarray data to zarr with overlaps for 1D features.
+    """
     temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
     start = datetime(2022, 7, 18, 8, 0, 0)
     end = datetime(2022, 7, 18, 9, 0, 0)
@@ -186,6 +217,29 @@ def test_xarray2zarr_with_overlaps(tmp_path_factory):
         datetime=0).values
     assert xdf_test.isel(datetime=1).values == xdf2.rsam.isel(
         datetime=0).values
+    assert xdf_test.datetime.values[-1] == xdf2.datetime.values[-1]
+
+
+def test_xarray2zarr_with_overlaps_2D(tmp_path_factory):
+    """
+    Test writing xarray data to zarr with overlaps for 2D features.
+    """
+    temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
+    start = datetime(2022, 7, 18, 8, 0, 0)
+    end = datetime(2022, 7, 18, 9, 0, 0)
+    xdf1 = generate_test_data(dim=2, intervals=3, freq='1h', tstart=start)
+    xdf2 = generate_test_data(dim=2, intervals=3, freq='1h', tstart=end)
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=start, endtime=end + timedelta(days=1),
+                backend='zarr')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf1)
+    c.save(xdf2)
+    xdf_test = c('ssam')
+    np.testing.assert_array_equal(xdf_test.isel(datetime=0).values, xdf1.ssam.isel(
+        datetime=0).values)
+    np.testing.assert_array_equal(xdf_test.isel(datetime=1).values, xdf2.ssam.isel(
+        datetime=0).values)
     assert xdf_test.datetime.values[-1] == xdf2.datetime.values[-1]
 
 
