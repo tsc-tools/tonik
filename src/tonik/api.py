@@ -1,22 +1,21 @@
-from argparse import ArgumentParser
-from datetime import timedelta, datetime, timezone
 import logging
 import os
+from argparse import ArgumentParser
+from datetime import datetime
+from typing import Annotated
 from urllib.parse import unquote
 
-from cftime import num2date, date2num
 import datashader as dsh
 import numpy as np
 import pandas as pd
 import uvicorn
+from cftime import date2num, num2date
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
-from pydantic import BaseModel
-from typing import Annotated
 
-from .storage import Storage
 from . import get_data
+from .storage import Storage
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +66,8 @@ class TonikAPI:
         _st = self.preprocess_datetime(starttime)
         _et = self.preprocess_datetime(endtime)
         g = Storage(group, rootdir=self.rootdir,
-                    starttime=_st, endtime=_et)
+                    starttime=_st, endtime=_et,
+                    create=False)
         if subdir is None:
             c = g
         else:
@@ -103,13 +103,15 @@ class TonikAPI:
         else:
             df = pd.DataFrame(data=feat.to_pandas(), columns=[feat.name])
             df['dates'] = df.index
-            try:
-                current_resolution = pd.Timedelta(df['dates'].diff().mean())
-                if current_resolution < pd.Timedelta(resolution):
-                    df = df.resample(pd.Timedelta(resolution)).mean()
-            except ValueError as e:
-                logger.warning(
-                    f"Cannot resample {feat.name} to {resolution}: e")
+            if resolution != 'full':
+                try:
+                    current_resolution = pd.Timedelta(
+                        df['dates'].diff().mean())
+                    if current_resolution < pd.Timedelta(resolution):
+                        df = df.resample(pd.Timedelta(resolution)).mean()
+                except ValueError:
+                    logger.warning(
+                        f"Cannot resample {feat.name} to {resolution}: e")
             df.rename(columns={feat.name: 'feature'}, inplace=True)
             output = df.to_csv(index=False, columns=['dates', 'feature'])
         return StreamingResponse(iter([output]),
@@ -143,7 +145,7 @@ class TonikAPI:
             c = sg.get_substore(*subdir)
         except TypeError:
             c = sg
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             msg = "Directory {} not found.".format(
                 '/'.join([sg.path] + subdir))
             raise HTTPException(status_code=404, detail=msg)
