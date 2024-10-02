@@ -33,5 +33,5 @@ def xarray2zarr(xds, path, mode='a'):
                 xda_existing = xds_existing[feature].drop_duplicates(
                     'datetime', keep='last')
                 xda_new = xds[feature].drop_duplicates('datetime', keep='last')
-                xda_new.combine_first(xda_existing).to_zarr(
-                    fout, group='original', mode='w')
+                xda_new = xda_new.combine_first(xda_existing)
+                xda_new.to_zarr(fout, group='original', mode='w')
