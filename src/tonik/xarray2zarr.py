@@ -14,24 +14,29 @@ def xarray2zarr(xds, path, mode='a'):
                 fout, group='original', mode='w')
         else:
             xds_existing = xr.open_zarr(fout, group='original')
-            try:
-                overlap = xds_existing.datetime.where(
-                    xds_existing.datetime == xds.datetime)
-                if overlap.size > 0:
-                    xds[feature].loc[dict(datetime=overlap)].to_zarr(
-                        fout, group='original', mode='r+', region='auto')
-                    xds[feature].drop_sel(datetime=overlap).to_zarr(
-                        fout, group='original', mode='a', append_dim="datetime")
-                else:
-                    xds[feature].to_zarr(
-                        fout, group='original', append_dim='datetime')
-            except Exception as e:
-                msg = f"Appending {feature} to {fout} failed: {e}\n"
-                msg += "Attempting to merge the two datasets."
-                logger.error(msg)
-                # remove duplicate datetime entries
-                xda_existing = xds_existing[feature].drop_duplicates(
-                    'datetime', keep='last')
-                xda_new = xds[feature].drop_duplicates('datetime', keep='last')
-                xda_new = xda_new.combine_first(xda_existing)
-                xda_new.to_zarr(fout, group='original', mode='w')
+            if xds_existing.datetime[0] > xds.datetime[0] or xds_existing.datetime[-1] > xds.datetime[-1]:
+                xds_new = xr.merge([xds_existing[feature], xds[feature]])
+                xds_new.to_zarr(fout, group='original', mode='w')
+            else:
+                try:
+                    overlap = xds_existing.datetime.where(
+                        xds_existing.datetime == xds.datetime)
+                    if overlap.size > 0:
+                        xds[feature].loc[dict(datetime=overlap)].to_zarr(
+                            fout, group='original', mode='r+', region='auto')
+                        xds[feature].drop_sel(datetime=overlap).to_zarr(
+                            fout, group='original', mode='a', append_dim="datetime")
+                    else:
+                        xds[feature].to_zarr(
+                            fout, group='original', append_dim='datetime')
+                except Exception as e:
+                    msg = f"Appending {feature} to {fout} failed: {e}\n"
+                    msg += "Attempting to merge the two datasets."
+                    logger.error(msg)
+                    # remove duplicate datetime entries
+                    xda_existing = xds_existing[feature].drop_duplicates(
+                        'datetime', keep='last')
+                    xda_new = xds[feature].drop_duplicates(
+                        'datetime', keep='last')
+                    xda_new = xda_new.combine_first(xda_existing)
+                    xda_new.to_zarr(fout, group='original', mode='w')

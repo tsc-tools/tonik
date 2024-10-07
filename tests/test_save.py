@@ -161,18 +161,21 @@ def test_xarray2zarr_outofsequence(tmp_path_factory):
     """
     temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
     start = datetime(2022, 7, 18, 8, 0, 0)
+    middle = datetime(2022, 7, 18, 12, 0, 0)
     end = datetime(2022, 7, 19, 12, 0, 0)
-    xdf1 = generate_test_data(dim=1, ndays=1, tstart=start)
-    xdf2 = generate_test_data(dim=1, ndays=1, tstart=end)
+    xdf1 = generate_test_data(dim=1, intervals=3, tstart=start)
+    xdf2 = generate_test_data(dim=1, intervals=3, tstart=middle)
+    xdf3 = generate_test_data(dim=1, intervals=3, tstart=end)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
                 backend='zarr')
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf2)
+    c.save(xdf3)
     c.save(xdf1)
+    c.save(xdf2)
     xdf_test = c('rsam')
     np.testing.assert_array_equal(
-        xdf_test.datetime.values, xdf1.merge(xdf2).datetime.values)
+        xdf_test.datetime.values, xr.merge([xdf1, xdf2, xdf3]).datetime.values)
 
 
 def test_xarray2zarr_duplicates(tmp_path_factory):

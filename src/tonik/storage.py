@@ -155,11 +155,7 @@ class Path(object):
 
         xd_index = dict(datetime=slice(self.starttime, self.endtime))
         with xr.open_dataset(filename, group='original', engine=self.backend) as ds:
-            try:
-                rq = ds.loc[xd_index].load()
-            except KeyError:
-                ds = ds.sortby("datetime")
-                rq = ds.loc[xd_index].load()
+            rq = ds.loc[xd_index].load()
 
         # Stack features
         if stack_length is not None:
