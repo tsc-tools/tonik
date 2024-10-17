@@ -29,7 +29,7 @@ def test_backend_speed():
     execution_time_zarr = timeit.timeit(lambda: write_read('zarr'), number=5)
     logger.info('Write and read with zarr took {} seconds.'.format(
         execution_time_zarr/5))
-    execution_time_h5 = timeit.timeit(lambda: write_read('h5netcdf'), number=5)
+    execution_time_h5 = timeit.timeit(lambda: write_read('netcdf'), number=5)
     logger.info('Write and read with h5 took {} seconds.'.format(
         execution_time_h5/5))
 

@@ -6,20 +6,20 @@ import pytest
 import xarray as xr
 
 from tonik import Storage, generate_test_data
-from tonik.xarray2hdf5 import xarray2hdf5
+from tonik.xarray2netcdf import xarray2netcdf
 
 
-def test_xarray2hdf5(tmp_path_factory):
+def test_xarray2netcdf(tmp_path_factory):
     """
     Test writing xarray data to hdf5.
     """
     xdf = generate_test_data(
         dim=2, ndays=3, tstart=datetime(2022, 7, 18, 0, 0, 0))
-    temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
+    temp_dir = tmp_path_factory.mktemp('test_xarray2netcdf')
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime.fromisoformat(xdf.attrs['starttime']),
                 endtime=datetime.fromisoformat(xdf.attrs['endtime']),
-                backend='h5netcdf')
+                backend='netcdf')
     c = g.get_substore('MDR', '00', 'HHZ')
     c.save(xdf)
 
@@ -34,14 +34,14 @@ def test_xarray2hdf5(tmp_path_factory):
     assert dt < np.timedelta64(1, 'us')
 
 
-def test_xarray2hdf5_archive_starttime(tmp_path_factory):
+def test_xarray2netcdf_archive_starttime(tmp_path_factory):
     xdf = generate_test_data(
         dim=1, ndays=3, tstart=datetime(2022, 7, 18, 0, 0, 0))
-    temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
+    temp_dir = tmp_path_factory.mktemp('test_xarray2netcdf')
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime(2000, 1, 1),
                 endtime=datetime.fromisoformat(xdf.attrs['endtime']),
-                backend='h5netcdf')
+                backend='netcdf')
     c = g.get_substore('MDR', '00', 'HHZ')
     c.save(xdf, archive_starttime=datetime(2022, 1, 1))
 
@@ -53,14 +53,14 @@ def test_xarray2hdf5_archive_starttime(tmp_path_factory):
     assert xdf_test.loc['2000-01-01':'2022-07-17T23:50:00'].shape[0] == nitems
 
 
-def test_xarray2hdf5_resolution(tmp_path_factory):
+def test_xarray2netcdf_resolution(tmp_path_factory):
     xdf = generate_test_data(dim=1, ndays=1, tstart=datetime(2022, 7, 18, 0, 0, 0),
                              add_nans=False)
-    temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
+    temp_dir = tmp_path_factory.mktemp('test_xarray2netcdf')
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime(2000, 1, 1),
                 endtime=datetime.fromisoformat(xdf.attrs['endtime']),
-                backend='h5netcdf')
+                backend='netcdf')
     c = g.get_substore('MDR', '00', 'HHZ')
     c.save(xdf, resolution=0.1, archive_starttime=datetime(2022, 7, 18))
 
@@ -69,18 +69,18 @@ def test_xarray2hdf5_resolution(tmp_path_factory):
     assert np.isnan(xdf_test.loc['2022-07-18T00:06:00'].data)
 
 
-def test_xarray2hdf5_with_gaps(tmp_path_factory):
+def test_xarray2netcdf_with_gaps(tmp_path_factory):
     """
     Test writing xarray data to hdf5 with gaps.
     """
-    temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
+    temp_dir = tmp_path_factory.mktemp('test_xarray2netcdf')
     start = datetime(2022, 7, 18, 8, 0, 0)
     end = datetime(2022, 7, 19, 12, 0, 0)
     xdf1 = generate_test_data(dim=1, ndays=1, tstart=start, add_nans=False)
     xdf2 = generate_test_data(dim=1, ndays=1, tstart=end, add_nans=False)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
-                backend='h5netcdf')
+                backend='netcdf')
     c = g.get_substore('MDR', '00', 'HHZ')
     c.save(xdf1)
     c.save(xdf2)
@@ -89,23 +89,23 @@ def test_xarray2hdf5_with_gaps(tmp_path_factory):
 
 
 @pytest.mark.xfail(raises=OSError)
-def test_xarray2hdf5_multi_access(tmp_path_factory):
+def test_xarray2netcdf_multi_access(tmp_path_factory):
     """
     Test writing xarray data to hdf5 while the file is open. This is currently
     not working with NetCDF4. See the following discussions for reference:
     https://github.com/pydata/xarray/issues/2887
     https://stackoverflow.com/questions/49701623/is-there-a-way-to-release-the-file-lock-for-a-xarray-dataset
     """
-    temp_dir = tmp_path_factory.mktemp('test_xarray2hdf5')
+    temp_dir = tmp_path_factory.mktemp('test_xarray2netcdf')
     xdf1 = generate_test_data(
         dim=1, ndays=1, tstart=datetime(2022, 7, 18, 8, 0, 0))
     xdf2 = generate_test_data(
         dim=1, ndays=1, tstart=datetime(2022, 7, 19, 12, 0, 0))
 
-    xarray2hdf5(xdf1, temp_dir)
+    xarray2netcdf(xdf1, temp_dir)
     xdf_dummy = xr.open_dataset(os.path.join(temp_dir, 'rsam.nc'),
                                 group='original', engine='h5netcdf')
-    xarray2hdf5(xdf2, temp_dir)
+    xarray2netcdf(xdf2, temp_dir)
 
 
 def test_xarray2zarr(tmp_path_factory):

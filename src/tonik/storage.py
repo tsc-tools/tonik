@@ -6,7 +6,7 @@ import re
 import pandas as pd
 import xarray as xr
 
-from .xarray2hdf5 import xarray2hdf5
+from .xarray2netcdf import xarray2netcdf
 from .xarray2zarr import xarray2zarr
 
 LOGGING_CONFIG = {
@@ -102,7 +102,7 @@ class Path(object):
 
     def feature_path(self, feature):
 
-        if self.backend == 'h5netcdf':
+        if self.backend == 'netcdf':
             file_ending = '.nc'
         elif self.backend == 'zarr':
             file_ending = '.zarr'
@@ -154,7 +154,8 @@ class Path(object):
                     format(stack_length, interval, num_periods))
 
         xd_index = dict(datetime=slice(self.starttime, self.endtime))
-        with xr.open_dataset(filename, group='original', engine=self.backend) as ds:
+        engine = 'h5netcdf' if self.backend == 'netcdf' else self.backend
+        with xr.open_dataset(filename, group='original', engine=engine) as ds:
             rq = ds.loc[xd_index].load()
 
         # Stack features
@@ -187,8 +188,8 @@ class Path(object):
         """
         Save a feature to disk
         """
-        if self.backend == 'h5netcdf':
-            xarray2hdf5(data, self.path, **kwargs)
+        if self.backend == 'netcdf':
+            xarray2netcdf(data, self.path, **kwargs)
         elif self.backend == 'zarr':
             xarray2zarr(data, self.path, **kwargs)
 
@@ -214,7 +215,7 @@ class Storage(Path):
     >>> rsam = c("rsam")
     """
 
-    def __init__(self, name, rootdir, starttime=None, endtime=None, create=True, backend='zarr'):
+    def __init__(self, name, rootdir, starttime=None, endtime=None, create=True, backend='netcdf'):
         self.stores = set()
         self.starttime = starttime
         self.endtime = endtime

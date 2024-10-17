@@ -1,15 +1,15 @@
-from datetime import datetime
 import logging
 import os
+from datetime import datetime
 from warnings import filterwarnings
 
-from cftime import num2date, date2num
 import h5netcdf
 import numpy as np
+from cftime import date2num, num2date
 
 
-def xarray2hdf5(xArray, fdir, rootGroupName="original", timedim="datetime",
-                archive_starttime=datetime(2000, 1, 1), resolution=None):
+def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
+                  archive_starttime=datetime(2000, 1, 1), resolution=None):
     """
     Store an xarray dataset as an HDF5 file.
 
@@ -31,23 +31,24 @@ def xarray2hdf5(xArray, fdir, rootGroupName="original", timedim="datetime",
         determined from the data.
     """
     filterwarnings(action='ignore', category=DeprecationWarning,
-               message='`np.bool` is a deprecated alias')
+                   message='`np.bool` is a deprecated alias')
 
-    starttime = xArray[timedim].values[0].astype('datetime64[us]').astype(datetime)
+    starttime = xArray[timedim].values[0].astype(
+        'datetime64[us]').astype(datetime)
     starttime = min(starttime, archive_starttime)
     if resolution is None:
         resolution = (np.diff(xArray[timedim])/np.timedelta64(1, 'h'))[0]
 
     for featureName in list(xArray.data_vars.keys()):
-        h5file = os.path.join(fdir, featureName +'.nc')
+        h5file = os.path.join(fdir, featureName + '.nc')
 
         mode = 'a' if os.path.isfile(h5file) else 'w'
-        
+
         with h5netcdf.File(h5file, mode) as h5f:
             try:
                 rootGrp = _create_h5_Structure(rootGroupName, featureName,
                                                h5f, xArray, starttime, timedim)
-            except ValueError: # group already exists, append
+            except ValueError:  # group already exists, append
                 rootGrp = h5f[rootGroupName]
 
             # determine indices
@@ -75,7 +76,8 @@ def xarray2hdf5(xArray, fdir, rootGroupName="original", timedim="datetime",
             try:
                 _setMetaInfo(featureName, h5f, xArray)
             except KeyError as e:
-                logging.warning(f"Could not set all meta info for {featureName}: {e}")
+                logging.warning(
+                    f"Could not set all meta info for {featureName}: {e}")
 
 
 def _create_h5_Structure(defaultGroupName, featureName, h5f, xArray, starttime, timedim):
@@ -85,15 +87,16 @@ def _create_h5_Structure(defaultGroupName, featureName, h5f, xArray, starttime, 
     coordinates.attrs['units'] = 'hours since 1970-01-01 00:00:00.0'
     coordinates.attrs['calendar'] = 'gregorian'
     rootGrp.attrs['starttime'] = str(starttime)
-    for label, size in xArray.dims.items(): 
+    for label, size in xArray.dims.items():
         if not np.issubdtype(xArray[label].dtype, np.datetime64):
-            rootGrp.dimensions[label] = size 
+            rootGrp.dimensions[label] = size
             coordinates = rootGrp.create_variable(label, (label,), float)
             coordinates[:] = xArray[label].values
     # Note: xArray.dims returns a dictionary of dimensions that are not necesarily
     # in the right order; xArray[featureName].dims returns a tuple with dimension
     # names in the correct order
-    rootGrp.create_variable(featureName, tuple(xArray[featureName].dims), dtype=float, fillvalue=0.)
+    rootGrp.create_variable(featureName, tuple(
+        xArray[featureName].dims), dtype=float, fillvalue=0.)
     return rootGrp
 
 
@@ -102,4 +105,3 @@ def _setMetaInfo(featureName, h5f, xArray):
     h5f.attrs['latitude'] = -42
     h5f.attrs['longitude'] = 168
     h5f.attrs['datatype'] = featureName
- 
