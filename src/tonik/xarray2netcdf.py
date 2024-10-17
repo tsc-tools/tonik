@@ -5,7 +5,10 @@ from warnings import filterwarnings
 
 import h5netcdf
 import numpy as np
+import xarray as xr
 from cftime import date2num, num2date
+
+from .utils import merge_arrays
 
 
 def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
@@ -33,16 +36,27 @@ def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
     filterwarnings(action='ignore', category=DeprecationWarning,
                    message='`np.bool` is a deprecated alias')
 
-    starttime = xArray[timedim].values[0].astype(
+    data_starttime = xArray[timedim].values[0].astype(
         'datetime64[us]').astype(datetime)
-    starttime = min(starttime, archive_starttime)
+    starttime = min(data_starttime, archive_starttime)
     if resolution is None:
         resolution = (np.diff(xArray[timedim])/np.timedelta64(1, 'h'))[0]
 
     for featureName in list(xArray.data_vars.keys()):
         h5file = os.path.join(fdir, featureName + '.nc')
-
-        mode = 'a' if os.path.isfile(h5file) else 'w'
+        mode = 'w'
+        if os.path.isfile(h5file):
+            if archive_starttime > data_starttime:
+                xds_existing = xr.open_dataset(
+                    h5file, group='original', engine='h5netcdf')
+                xda_new = merge_arrays(
+                    xds_existing[featureName], xArray[featureName],
+                    resolution=resolution)
+                xds_existing.close()
+                xda_new.to_netcdf(h5file, group='original',
+                                  mode='w', engine='h5netcdf')
+                continue
+            mode = 'a'
 
         with h5netcdf.File(h5file, mode) as h5f:
             try:

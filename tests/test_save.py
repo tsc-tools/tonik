@@ -53,6 +53,24 @@ def test_xarray2netcdf_archive_starttime(tmp_path_factory):
     assert xdf_test.loc['2000-01-01':'2022-07-17T23:50:00'].shape[0] == nitems
 
 
+def test_xarray2netcdf_merge_arrays(tmp_path_factory):
+    temp_dir = tmp_path_factory.mktemp('test_xarray2netcdf')
+    start = datetime(2022, 7, 18, 8, 0, 0)
+    end = datetime(2022, 7, 19, 12, 0, 0)
+    xdf1 = generate_test_data(dim=1, ndays=1, tstart=start, add_nans=False)
+    xdf2 = generate_test_data(dim=1, ndays=1, tstart=end, add_nans=False)
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=start, endtime=end + timedelta(days=1),
+                backend='netcdf')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf2, archive_starttime=datetime(2022, 8, 1))
+    c.save(xdf1, archive_starttime=datetime(2022, 8, 1))
+    xdf_test = c('rsam')
+    assert xdf_test.isnull().sum() == 24
+    assert xdf_test.loc['2022-07-18T08:00:00'] == xdf1['rsam'].loc['2022-07-18T08:00:00']
+    assert xdf_test.loc['2022-07-20T11:50:00'] == xdf2['rsam'].loc['2022-07-20T11:50:00']
+
+
 def test_xarray2netcdf_resolution(tmp_path_factory):
     xdf = generate_test_data(dim=1, ndays=1, tstart=datetime(2022, 7, 18, 0, 0, 0),
                              add_nans=False)

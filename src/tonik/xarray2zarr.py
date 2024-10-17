@@ -3,31 +3,9 @@ import os
 
 import xarray as xr
 
+from .utils import merge_arrays
+
 logger = logging.getLogger(__name__)
-
-
-def merge_arrays(xds_old: xr.DataArray, xds_new: xr.DataArray) -> xr.DataArray:
-    """
-    Merge two xarray datasets with the same datetime index.
-
-    Parameters
-    ----------
-    xds_old : xr.DataArray
-        Old array.
-    xds_new : xr.DataArray
-        New array.
-
-    Returns
-    -------
-    xr.DataArray
-        Merged array.
-    """
-    xda_old = xds_old.drop_duplicates(
-        'datetime', keep='last')
-    xda_new = xds_new.drop_duplicates(
-        'datetime', keep='last')
-    xda_new = xda_new.combine_first(xda_old)
-    return xda_new
 
 
 def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a'):

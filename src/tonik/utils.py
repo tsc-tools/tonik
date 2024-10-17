@@ -56,3 +56,36 @@ def generate_test_data(dim=1, ndays=30, nfreqs=10,
     xds.attrs['station'] = 'MDR'
     xds.attrs['interval'] = '10min'
     return xds
+
+
+def merge_arrays(xds_old: xr.DataArray, xds_new: xr.DataArray,
+                 resolution: float = None) -> xr.DataArray:
+    """
+    Merge two xarray datasets with the same datetime index.
+
+    Parameters
+    ----------
+    xds_old : xr.DataArray
+        Old array.
+    xds_new : xr.DataArray
+        New array.
+    resolution : float
+        Time resolution in hours.
+
+    Returns
+    -------
+    xr.DataArray
+        Merged array.
+    """
+    xda_old = xds_old.drop_duplicates(
+        'datetime', keep='last')
+    xda_new = xds_new.drop_duplicates(
+        'datetime', keep='last')
+    xda_new = xda_new.combine_first(xda_old)
+    if resolution is not None:
+        new_dates = pd.date_range(
+            xda_new.datetime.values[0],
+            xda_new.datetime.values[-1],
+            freq=f'{resolution}h')
+        xda_new = xda_new.reindex(datetime=new_dates)
+    return xda_new
