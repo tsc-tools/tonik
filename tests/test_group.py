@@ -148,3 +148,9 @@ def test_shape(tmp_path_factory):
     assert rsam_shape['datetime'] == 20
     assert rsam_shape['frequency'] == 10
     assert rsam_shape['fbfrequency'] == 10
+
+    g1 = Storage('volcanoes', rootdir=rootdir, backend='zarr')
+    g1.save(xdf, mode='w')
+    rsam_shape = g1.shape('ssam')
+    assert rsam_shape['datetime'] == 20
+    assert rsam_shape['frequency'] == 10
