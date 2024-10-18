@@ -85,6 +85,8 @@ def test_xarray2netcdf_resolution(tmp_path_factory):
     xdf_test = c('rsam')
     assert xdf_test.loc['2022-07-18T00:12:00'] == xdf['rsam'].loc['2022-07-18T00:10:00']
     assert np.isnan(xdf_test.loc['2022-07-18T00:06:00'].data)
+    assert xdf_test.attrs['resolution'] == 0.1
+    assert xdf_test.attrs['resolution_units'] == 'h'
 
 
 def test_xarray2netcdf_with_gaps(tmp_path_factory):

@@ -156,15 +156,16 @@ class Path(object):
 
         xd_index = dict(datetime=slice(self.starttime, self.endtime))
         with xr.open_dataset(filename, group='original', engine=self.engine) as ds:
-            rq = ds.loc[xd_index].load()
+            rq = ds[feature].loc[xd_index].load()
+            rq.attrs = ds.attrs
 
         # Stack features
         if stack_length is not None:
             logger.debug("Stacking feature...")
             try:
-                xdf = rq[feature].rolling(datetime=int(num_periods),
-                                          center=False,
-                                          min_periods=1).mean()
+                xdf = rq.rolling(datetime=int(num_periods),
+                                 center=False,
+                                 min_periods=1).mean()
                 # Return requested timeframe to that defined in initialisation
                 self.starttime += pd.to_timedelta(stack_length)
                 xdf_new = xdf.loc[self.starttime:self.endtime]
@@ -175,8 +176,7 @@ class Path(object):
                              format(stack_length, feature))
             else:
                 return xdf_new
-
-        return rq[feature]
+        return rq
 
     def load(self, *args, **kwargs):
         """

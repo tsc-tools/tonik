@@ -88,6 +88,8 @@ def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
                 data[indices] = xArray[featureName].values
             rootGrp.attrs['endtime'] = str(num2date(times[-1], units=rootGrp[timedim].attrs['units'],
                                                     calendar=rootGrp[timedim].attrs['calendar']))
+            rootGrp.attrs['resolution'] = resolution
+            rootGrp.attrs['resolution_units'] = 'h'
             try:
                 _setMetaInfo(featureName, h5f, xArray)
             except KeyError as e:
@@ -102,7 +104,7 @@ def _create_h5_Structure(defaultGroupName, featureName, h5f, xArray, starttime, 
     coordinates.attrs['units'] = 'hours since 1970-01-01 00:00:00.0'
     coordinates.attrs['calendar'] = 'gregorian'
     rootGrp.attrs['starttime'] = str(starttime)
-    for label, size in xArray.dims.items():
+    for label, size in xArray.sizes.items():
         if not np.issubdtype(xArray[label].dtype, np.datetime64):
             rootGrp.dimensions[label] = size
             coordinates = rootGrp.create_variable(label, (label,), float)

@@ -18,7 +18,10 @@ def write_read(backend):
     test_dir = tempfile.mkdtemp()
     sg = Storage('speed_test', test_dir, starttime=tstart, endtime=tend,
                  backend=backend)
-    sg.save(spec)
+    kwargs = {}
+    if backend == 'netcdf':
+        kwargs['archive_starttime'] = tstart
+    sg.save(spec, **kwargs)
     spec_test = sg('ssam')
 
 
