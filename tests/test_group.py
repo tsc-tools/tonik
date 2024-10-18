@@ -136,3 +136,15 @@ def test_rolling_window(tmp_path_factory):
     np.testing.assert_array_almost_equal(
         np.array(rolling_mean), rsam_rolling.values[num_windows:], 6
     )
+
+
+def test_shape(tmp_path_factory):
+    rootdir = tmp_path_factory.mktemp('data')
+    g = Storage('volcanoes', rootdir=rootdir)
+    tstart = datetime(2016, 1, 1)
+    xdf = generate_test_data(dim=2, intervals=20, tstart=tstart)
+    g.save(xdf, mode='w', archive_starttime=tstart)
+    rsam_shape = g.shape('ssam')
+    assert rsam_shape['datetime'] == 20
+    assert rsam_shape['frequency'] == 10
+    assert rsam_shape['fbfrequency'] == 10

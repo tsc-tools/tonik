@@ -76,6 +76,7 @@ class Path(object):
         self.name = name
         self.create = create
         self.backend = backend
+        self.engine = 'h5netcdf' if self.backend == 'netcdf' else self.backend
         self.path = os.path.join(parentdir, name)
         if create:
             try:
@@ -154,8 +155,7 @@ class Path(object):
                     format(stack_length, interval, num_periods))
 
         xd_index = dict(datetime=slice(self.starttime, self.endtime))
-        engine = 'h5netcdf' if self.backend == 'netcdf' else self.backend
-        with xr.open_dataset(filename, group='original', engine=engine) as ds:
+        with xr.open_dataset(filename, group='original', engine=self.engine) as ds:
             rq = ds.loc[xd_index].load()
 
         # Stack features
@@ -192,6 +192,14 @@ class Path(object):
             xarray2netcdf(data, self.path, **kwargs)
         elif self.backend == 'zarr':
             xarray2zarr(data, self.path, **kwargs)
+
+    def shape(self, feature):
+        """
+        Get shape of a feature on disk
+        """
+        filename = self.feature_path(feature)
+        with xr.open_dataset(filename, group='original', engine=self.engine) as ds:
+            return ds.sizes
 
 
 class Storage(Path):
