@@ -199,7 +199,7 @@ class Path(object):
         """
         filename = self.feature_path(feature)
         with xr.open_dataset(filename, group='original', engine=self.engine) as ds:
-            return ds.sizes
+            return ds[feature].sizes
 
 
 class Storage(Path):
