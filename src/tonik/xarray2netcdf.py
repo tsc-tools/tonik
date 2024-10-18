@@ -12,7 +12,8 @@ from .utils import merge_arrays
 
 
 def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
-                  archive_starttime=datetime(2000, 1, 1), resolution=None):
+                  archive_starttime=datetime(2000, 1, 1), resolution=None,
+                  mode='a'):
     """
     Store an xarray dataset as an HDF5 file.
 
@@ -44,8 +45,8 @@ def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
 
     for featureName in list(xArray.data_vars.keys()):
         h5file = os.path.join(fdir, featureName + '.nc')
-        mode = 'w'
-        if os.path.isfile(h5file):
+        _mode = 'w'
+        if os.path.isfile(h5file) and mode == 'a':
             if archive_starttime > data_starttime:
                 xds_existing = xr.open_dataset(
                     h5file, group='original', engine='h5netcdf')
@@ -56,9 +57,9 @@ def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
                 xda_new.to_netcdf(h5file, group='original',
                                   mode='w', engine='h5netcdf')
                 continue
-            mode = 'a'
+            _mode = 'a'
 
-        with h5netcdf.File(h5file, mode) as h5f:
+        with h5netcdf.File(h5file, _mode) as h5f:
             try:
                 rootGrp = _create_h5_Structure(rootGroupName, featureName,
                                                h5f, xArray, starttime, timedim)
