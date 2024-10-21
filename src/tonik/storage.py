@@ -1,9 +1,7 @@
 import logging
 import logging.config
 import os
-import re
 
-import pandas as pd
 import xarray as xr
 
 from .xarray2netcdf import xarray2netcdf
@@ -113,14 +111,12 @@ class Path(object):
             self.children[feature] = Path(feature + file_ending, self.path)
         return _feature_path
 
-    def __call__(self, feature, stack_length=None, interval='10min'):
+    def __call__(self, feature, group='original'):
         """
         Request a particular feature
 
         :param feature: Feature name
         :type feature: str
-        :param stack_length: length of moving average in time
-        :type stack_length: str
 
         """
         if self.endtime <= self.starttime:
@@ -130,52 +126,12 @@ class Path(object):
 
         logger.debug(
             f"Reading feature {feature} between {self.starttime} and {self.endtime}")
-        num_periods = None
-        if stack_length is not None:
-            valid_stack_units = ['W', 'D', 'h', 'T', 'min', 'S']
-            if re.match(r'\d*\s*(\w*)', stack_length).group(1) not in valid_stack_units:
-                raise ValueError(
-                    'Stack length should be one of: {}'.
-                    format(', '.join(valid_stack_units))
-                )
-
-            if pd.to_timedelta(stack_length) < pd.to_timedelta(interval):
-                raise ValueError('Stack length {} is less than interval {}'.
-                                 format(stack_length, interval))
-
-            # Rewind starttime to account for stack length
-            self.starttime -= pd.to_timedelta(stack_length)
-
-            num_periods = (pd.to_timedelta(stack_length) /
-                           pd.to_timedelta(interval))
-            if not num_periods.is_integer():
-                raise ValueError(
-                    'Stack length {} / interval {} = {}, but it needs'
-                    ' to be a whole number'.
-                    format(stack_length, interval, num_periods))
 
         xd_index = dict(datetime=slice(self.starttime, self.endtime))
-        with xr.open_dataset(filename, group='original', engine=self.engine) as ds:
+        with xr.open_dataset(filename, group=group, engine=self.engine) as ds:
             rq = ds[feature].loc[xd_index].load()
             rq.attrs = ds.attrs
 
-        # Stack features
-        if stack_length is not None:
-            logger.debug("Stacking feature...")
-            try:
-                xdf = rq.rolling(datetime=int(num_periods),
-                                 center=False,
-                                 min_periods=1).mean()
-                # Return requested timeframe to that defined in initialisation
-                self.starttime += pd.to_timedelta(stack_length)
-                xdf_new = xdf.loc[self.starttime:self.endtime]
-                xdf_new = xdf_new.rename(feature)
-            except ValueError as e:
-                logger.error(e)
-                logger.error('Stack length {} is not valid for feature {}'.
-                             format(stack_length, feature))
-            else:
-                return xdf_new
         return rq
 
     def load(self, *args, **kwargs):

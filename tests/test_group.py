@@ -108,36 +108,6 @@ def test_call_single_day(tmp_path_factory):
     assert pd.to_datetime(enddate) == last_time
 
 
-def test_rolling_window(tmp_path_factory):
-    rootdir = tmp_path_factory.mktemp('data')
-    startdate = datetime(2016, 1, 1)
-    enddate = datetime(2016, 1, 2, 12)
-    xdf = generate_test_data(dim=1, ndays=20, tstart=startdate)
-    g = Storage('volcanoes', rootdir=rootdir)
-    g.save(xdf)
-
-    stack_len_seconds = 3600
-    stack_len_string = '1h'
-
-    num_windows = int(stack_len_seconds / pd.Timedelta(xdf.interval).seconds)
-    g.starttime = startdate
-    g.endtime = enddate
-    rsam = g('rsam')
-    rsam_rolling = g('rsam', stack_length=stack_len_string)
-
-    # Check correct datetime array
-    np.testing.assert_array_equal(rsam.datetime.values,
-                                  rsam_rolling.datetime.values)
-    # Check correct values
-    rolling_mean = [
-        np.nanmean(rsam.data[(ind-num_windows+1):ind+1])
-        for ind in np.arange(num_windows, len(rsam_rolling.data))
-    ]
-    np.testing.assert_array_almost_equal(
-        np.array(rolling_mean), rsam_rolling.values[num_windows:], 6
-    )
-
-
 def test_shape(tmp_path_factory):
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
