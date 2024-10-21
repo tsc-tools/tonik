@@ -11,7 +11,7 @@ from cftime import date2num, num2date
 from .utils import merge_arrays
 
 
-def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
+def xarray2netcdf(xArray, fdir, group="original", timedim="datetime",
                   archive_starttime=datetime(2000, 1, 1), resolution=None,
                   mode='a'):
     """
@@ -23,7 +23,7 @@ def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
         Data to store.
     fdir : str
         Directory to store data under.
-    rootGroupName : str
+    group : str
         Hdf5 group name.
     timedim : str
         Name of time dimension.
@@ -49,22 +49,22 @@ def xarray2netcdf(xArray, fdir, rootGroupName="original", timedim="datetime",
         if os.path.isfile(h5file) and mode == 'a':
             if archive_starttime > data_starttime:
                 xds_existing = xr.open_dataset(
-                    h5file, group='original', engine='h5netcdf')
+                    h5file, group=group, engine='h5netcdf')
                 xda_new = merge_arrays(
                     xds_existing[featureName], xArray[featureName],
                     resolution=resolution)
                 xds_existing.close()
-                xda_new.to_netcdf(h5file, group='original',
+                xda_new.to_netcdf(h5file, group=group,
                                   mode='w', engine='h5netcdf')
                 continue
             _mode = 'a'
 
         with h5netcdf.File(h5file, _mode) as h5f:
             try:
-                rootGrp = _create_h5_Structure(rootGroupName, featureName,
+                rootGrp = _create_h5_Structure(group, featureName,
                                                h5f, xArray, starttime, timedim)
             except ValueError:  # group already exists, append
-                rootGrp = h5f[rootGroupName]
+                rootGrp = h5f[group]
 
             # determine indices
             new_time = date2num(xArray[timedim].values.astype('datetime64[us]').astype(datetime),
