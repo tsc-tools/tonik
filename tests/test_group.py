@@ -27,6 +27,35 @@ def test_group(tmp_path_factory):
     c = g.get_substore('MDR1', '00', 'HHZ')
 
 
+def test_subgroup(tmp_path_factory):
+    """
+    Test storing data in different subgroups in netcdf and zarr.
+    """
+
+    startdate = datetime(2016, 1, 1)
+    enddate = datetime(2016, 1, 2, 12)
+    rootdir = tmp_path_factory.mktemp('data')
+    g = Storage('volcanoes', rootdir=rootdir,
+                starttime=startdate, endtime=enddate)
+    xdf = generate_test_data(dim=1, ndays=20, tstart=startdate)
+    g.save(xdf)
+    xdf.rsam.values += 100.
+    g.save(xdf, group='modified')
+    rsam_original = g('rsam')
+    rsam_modified = g('rsam', group='modified')
+    assert int(rsam_modified.mean()) == (int(rsam_original.mean()) + 100)
+    g = Storage('volcanoes', rootdir=rootdir,
+                starttime=startdate, endtime=enddate,
+                backend='zarr')
+    xdf = generate_test_data(dim=1, ndays=20, tstart=startdate)
+    g.save(xdf)
+    xdf.rsam.values += 100.
+    g.save(xdf, group='modified')
+    rsam_original = g('rsam')
+    rsam_modified = g('rsam', group='modified')
+    assert int(rsam_modified.mean()) == (int(rsam_original.mean()) + 100)
+
+
 def test_non_existant_feature(tmp_path_factory):
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('test_experiment', rootdir)
@@ -106,6 +135,20 @@ def test_call_single_day(tmp_path_factory):
     last_time = pd.to_datetime(rsam.datetime.values[-1])
     assert pd.to_datetime(startdate) == first_time
     assert pd.to_datetime(enddate) == last_time
+
+
+def test_call_single_datapoint(tmp_path_factory):
+    rootdir = tmp_path_factory.mktemp('data')
+    g = Storage('volcanoes', rootdir=rootdir)
+    startdate = datetime(2016, 1, 2, 1)
+    enddate = startdate
+    g.starttime = startdate
+    g.endtime = enddate
+    xdf = generate_test_data(dim=1, tstart=startdate)
+    g.save(xdf)
+    rsam = g('rsam')
+    assert float(
+        xdf.rsam.loc[dict(datetime='2016-01-02T01:00:00')]) == float(rsam)
 
 
 def test_shape(tmp_path_factory):
