@@ -119,7 +119,7 @@ class Path(object):
         :type feature: str
 
         """
-        if self.endtime <= self.starttime:
+        if self.endtime < self.starttime:
             raise ValueError('Startime has to be smaller than endtime.')
 
         filename = self.feature_path(feature)
