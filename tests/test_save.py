@@ -89,6 +89,22 @@ def test_xarray2netcdf_resolution(tmp_path_factory):
     assert xdf_test.attrs['resolution_units'] == 'h'
 
 
+def test_xarray2netcdf_attributes(tmp_path_factory):
+    starttime = datetime(2022, 7, 18, 0, 0, 0)
+    xdf = generate_test_data(dim=1, ndays=1, tstart=starttime,
+                             add_nans=False)
+    temp_dir = tmp_path_factory.mktemp('test_xarray2netcdf')
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=datetime(2000, 1, 1),
+                endtime=datetime.fromisoformat(xdf.attrs['endtime']),
+                backend='netcdf')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf, archive_starttime=starttime)
+    xdf_test = c('rsam')
+    assert xdf_test.attrs['station'] == xdf.attrs['station']
+    assert xdf_test.attrs['feature'] == 'rsam'
+
+
 def test_xarray2netcdf_with_gaps(tmp_path_factory):
     """
     Test writing xarray data to hdf5 with gaps.

@@ -91,7 +91,7 @@ def xarray2netcdf(xArray, fdir, group="original", timedim="datetime",
             rootGrp.attrs['resolution'] = resolution
             rootGrp.attrs['resolution_units'] = 'h'
             try:
-                _setMetaInfo(featureName, h5f, xArray)
+                _setMetaInfo(featureName, rootGrp, xArray)
             except KeyError as e:
                 logging.warning(
                     f"Could not set all meta info for {featureName}: {e}")
@@ -117,8 +117,7 @@ def _create_h5_Structure(defaultGroupName, featureName, h5f, xArray, starttime, 
     return rootGrp
 
 
-def _setMetaInfo(featureName, h5f, xArray):
-    h5f.attrs['station'] = xArray.attrs['station']
-    h5f.attrs['latitude'] = -42
-    h5f.attrs['longitude'] = 168
-    h5f.attrs['datatype'] = featureName
+def _setMetaInfo(featureName, rootGrp, xArray):
+    for key, value in xArray.attrs.items():
+        rootGrp.attrs[key] = value
+    rootGrp.attrs['feature'] = featureName
