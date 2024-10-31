@@ -23,9 +23,11 @@ logger = logging.getLogger(__name__)
 if sys.version_info >= (3, 10):
     # For Python 3.10 and above, use the new union operator '|'
     SubdirType = Annotated[list[str] | None, Query()]
+    InventoryReturnType = list | dict
 else:
     # For Python 3.9 and below, use Union from typing
     SubdirType = Annotated[Union[List[str], None], Query()]
+    InventoryReturnType = Union[list, dict]
 
 
 class TonikAPI:
@@ -147,7 +149,7 @@ class TonikAPI:
             d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
         return freq, dates, spec
 
-    def inventory(self, group: str, subdir: SubdirType = None, tree: bool = True) -> list | dict:
+    def inventory(self, group: str, subdir: SubdirType = None, tree: bool = True) -> InventoryReturnType:
         sg = Storage(group, rootdir=self.rootdir, create=False)
         try:
             c = sg.get_substore(*subdir)
