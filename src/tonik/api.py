@@ -1,8 +1,9 @@
 import logging
 import os
+import sys
 from argparse import ArgumentParser
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, List, Union
 from urllib.parse import unquote
 
 import datashader as dsh
@@ -18,6 +19,13 @@ from . import get_data
 from .storage import Storage
 
 logger = logging.getLogger(__name__)
+
+if sys.version_info >= (3, 10):
+    # For Python 3.10 and above, use the new union operator '|'
+    SubdirType = Annotated[list[str] | None, Query()]
+else:
+    # For Python 3.9 and below, use Union from typing
+    SubdirType = Annotated[Union[List[str], None], Query()]
 
 
 class TonikAPI:
@@ -62,7 +70,7 @@ class TonikAPI:
                 verticalres: int = 10,
                 log: bool = False,
                 normalise: bool = False,
-                subdir: Annotated[list[str] | None, Query()] = None):
+                subdir: SubdirType = None):
         _st = self.preprocess_datetime(starttime)
         _et = self.preprocess_datetime(endtime)
         g = Storage(group, rootdir=self.rootdir,
