@@ -147,7 +147,7 @@ class TonikAPI:
             d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
         return freq, dates, spec
 
-    def inventory(self, group: str, subdir: Annotated[list[str] | None, Query()] = None, tree: bool = True) -> list | dict:
+    def inventory(self, group: str, subdir: SubdirType = None, tree: bool = True) -> list | dict:
         sg = Storage(group, rootdir=self.rootdir, create=False)
         try:
             c = sg.get_substore(*subdir)
