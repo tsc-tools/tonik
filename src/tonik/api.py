@@ -3,7 +3,7 @@ import os
 import sys
 from argparse import ArgumentParser
 from datetime import datetime
-from typing import Annotated, List, Union
+from typing import Annotated, List, Union, Optional
 from urllib.parse import unquote
 
 import datashader as dsh
@@ -20,14 +20,8 @@ from .storage import Storage
 
 logger = logging.getLogger(__name__)
 
-if sys.version_info >= (3, 10):
-    # For Python 3.10 and above, use the new union operator '|'
-    SubdirType = Annotated[list[str] | None, Query()]
-    InventoryReturnType = list | dict
-else:
-    # For Python 3.9 and below, use Union from typing
-    SubdirType = Annotated[Union[List[str], None], Query()]
-    InventoryReturnType = Union[list, dict]
+SubdirType = Annotated[Union[List[str], None], Query()]
+InventoryReturnType = Union[list, dict]
 
 
 class TonikAPI:
@@ -66,21 +60,20 @@ class TonikAPI:
     def feature(self,
                 group: str,
                 name: str,
-                starttime: str = None,
-                endtime: str = None,
+                starttime: Union[str, None],
+                endtime: Union[str, None],
+                subdir: SubdirType = None,
                 resolution: str = 'full',
                 verticalres: int = 10,
                 log: bool = False,
-                normalise: bool = False,
-                subdir: SubdirType = None):
+                normalise: bool = False):
         _st = self.preprocess_datetime(starttime)
         _et = self.preprocess_datetime(endtime)
         g = Storage(group, rootdir=self.rootdir,
                     starttime=_st, endtime=_et,
                     create=False)
-        if subdir is None:
-            c = g
-        else:
+        c = g
+        if subdir:
             c = g.get_substore(*subdir)
         try:
             feat = c(name)

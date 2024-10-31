@@ -36,7 +36,7 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original'):
         else:
             try:
                 xds_existing = xr.open_zarr(fout, group=group)
-            except PathNotFoundError:
+            except (PathNotFoundError, FileNotFoundError):
                 xds[feature].to_zarr(fout, group=group, mode='a')
                 continue
             if xds_existing.datetime[0] > xds.datetime[0] or xds_existing.datetime[-1] > xds.datetime[-1]:
