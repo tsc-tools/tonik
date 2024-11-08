@@ -162,9 +162,11 @@ class TonikAPI:
 def main(argv=None):
     parser = ArgumentParser()
     parser.add_argument("--rootdir", default='/tmp')
+    parser.add_argument("-p", "--port", default=8003, type=int)
+    parser.add_argument("--host", default='0.0.0.0')
     args = parser.parse_args(argv)
     ta = TonikAPI(args.rootdir)
-    uvicorn.run(ta.app, host="0.0.0.0", port=8003)
+    uvicorn.run(ta.app, host=args.host, port=args.port)
 
 
 if __name__ == "__main__":

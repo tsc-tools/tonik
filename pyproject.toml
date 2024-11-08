@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tonik"
-version = "0.1.9"
+version = "0.1.10"
 authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
@@ -27,7 +27,7 @@ dependencies = [
     "h5netcdf>=1.1",
     "python-json-logger>=2.0",
     "uvicorn[standard]>=0.22",
-    "fastapi>=0.95",
+    "fastapi>=0.112",
     "matplotlib",
     "zarr",
 ]
