@@ -103,7 +103,7 @@ def _create_h5_Structure(defaultGroupName, featureName, h5f, xArray, starttime, 
     coordinates = rootGrp.create_variable(timedim, (timedim,), float)
     coordinates.attrs['units'] = 'hours since 1970-01-01 00:00:00.0'
     coordinates.attrs['calendar'] = 'gregorian'
-    rootGrp.attrs['starttime'] = str(starttime)
+    rootGrp.attrs['archive_starttime'] = str(starttime)
     for label, size in xArray.sizes.items():
         if not np.issubdtype(xArray[label].dtype, np.datetime64):
             rootGrp.dimensions[label] = size
