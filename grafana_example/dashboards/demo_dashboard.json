@@ -1,0 +1,534 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "mappings": {
+          "time": {
+            "source": "field",
+            "value": "time"
+          },
+          "timeEnd": {
+            "source": "field",
+            "value": "timeEnd"
+          }
+        },
+        "name": "Anomaly",
+        "target": {
+          "columns": [],
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "limit": 100,
+          "matchAny": false,
+          "refId": "",
+          "root_selector": "",
+          "source": "url",
+          "tags": [],
+          "type": "json",
+          "url": "http://api:8003/labels?group=volcanoes&subdir=${volcano}&subdir=${station}&subdir=${location}&subdir=${channel}&starttime=${__from:date:iso}&endtime=${__to:date:iso}",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 1,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "dates",
+              "text": "",
+              "type": "timestamp"
+            },
+            {
+              "selector": "feature",
+              "text": "",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "csv",
+          "url": "http://api:8003/feature?group=volcanoes&name=${1dfeature}&subdir=${volcano}&subdir=${station}&subdir=${location}&subdir=${channel}&starttime=${__from:date:iso}&endtime=${__to:date:iso}",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "${1dfeature}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "Oranges",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "show": true,
+          "yHistogram": false
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false
+        }
+      },
+      "pluginVersion": "9.5.2",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "dates",
+              "text": "",
+              "type": "timestamp"
+            },
+            {
+              "selector": "feature",
+              "text": "",
+              "type": "number"
+            },
+            {
+              "selector": "freqs",
+              "text": "",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "csv",
+          "url": "http://api:8003/feature?group=volcanoes&name=${2dfeature}&subdir=${volcano}&subdir=${station}&subdir=${location}&subdir=${channel}&starttime=${__from:date:iso}&endtime=${__to:date:iso}",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "${2dfeature}",
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "freqs",
+            "rowField": "dates",
+            "valueField": "feature"
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "destinationType": "time",
+                "targetField": "dates\\freqs"
+              }
+            ],
+            "fields": {}
+          }
+        }
+      ],
+      "type": "heatmap"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "Mt Doom",
+          "value": "Mt Doom"
+        },
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+        },
+        "definition": "vumt- (infinity) json",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Volcano",
+        "multi": false,
+        "name": "volcano",
+        "options": [],
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "refId": "variable",
+            "root_selector": "",
+            "source": "url",
+            "type": "json",
+            "url": "http://api:8003/inventory?group=volcanoes&tree=false",
+            "url_options": {
+              "data": "",
+              "method": "GET"
+            }
+          },
+          "query": "",
+          "queryType": "infinity"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "MDR",
+          "value": "MDR"
+        },
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+        },
+        "definition": "vumt- (infinity) json",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Station",
+        "multi": false,
+        "name": "station",
+        "options": [],
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "refId": "variable",
+            "root_selector": "",
+            "source": "url",
+            "type": "json",
+            "url": "http://api:8003/inventory?group=volcanoes&subdir=${volcano}",
+            "url_options": {
+              "data": "",
+              "method": "GET"
+            }
+          },
+          "query": "",
+          "queryType": "infinity"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "00",
+          "value": "00"
+        },
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+        },
+        "definition": "vumt- (infinity) json",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Location",
+        "multi": false,
+        "name": "location",
+        "options": [],
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "refId": "variable",
+            "root_selector": "",
+            "source": "url",
+            "type": "json",
+            "url": "http://api:8003/inventory?group=volcanoes&subdir=${volcano}&subdir=${station}",
+            "url_options": {
+              "data": "",
+              "method": "GET"
+            }
+          },
+          "query": "",
+          "queryType": "infinity"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "BHZ",
+          "value": "BHZ"
+        },
+        "datasource": {
+          "type": "yesoreyeram-infinity-datasource",
+          "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+        },
+        "definition": "vumt- (infinity) json",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Channel",
+        "multi": false,
+        "name": "channel",
+        "options": [],
+        "query": {
+          "infinityQuery": {
+            "columns": [],
+            "filters": [],
+            "format": "table",
+            "refId": "variable",
+            "root_selector": "",
+            "source": "url",
+            "type": "json",
+            "url": "http://api:8003/inventory?group=volcanoes&subdir=${volcano}&subdir=${station}&subdir=${location}",
+            "url_options": {
+              "data": "",
+              "method": "GET"
+            }
+          },
+          "query": "",
+          "queryType": "infinity"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": {
+          "selected": true,
+          "text": "dsar",
+          "value": "dsar"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Feature (1D)",
+        "multi": false,
+        "name": "1dfeature",
+        "options": [
+          {
+            "selected": false,
+            "text": "rsam",
+            "value": "rsam"
+          },
+          {
+            "selected": true,
+            "text": "dsar",
+            "value": "dsar"
+          }
+        ],
+        "query": "rsam,dsar",
+        "queryValue": "",
+        "skipUrlSync": false,
+        "type": "custom"
+      },
+      {
+        "current": {
+          "selected": false,
+          "text": "ssam",
+          "value": "ssam"
+        },
+        "hide": 0,
+        "includeAll": false,
+        "label": "Feature (2D)",
+        "multi": false,
+        "name": "2dfeature",
+        "options": [
+          {
+            "selected": true,
+            "text": "ssam",
+            "value": "ssam"
+          },
+          {
+            "selected": false,
+            "text": "filterbank",
+            "value": "filterbank"
+          }
+        ],
+        "query": "ssam,filterbank",
+        "skipUrlSync": false,
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "Tonik Demo Dashboard",
+  "uid": "a62e7d2e-9e15-4554-a15b-1607273a334b",
+  "version": 2,
+  "weekStart": ""
+}

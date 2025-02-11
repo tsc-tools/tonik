@@ -1,0 +1,30 @@
+version: '3.4'
+
+services:
+  grafana:
+    build:
+      context: .
+      dockerfile: Dockerfile_grafana
+    container_name: tonik_example_grafana 
+    image: tonik_example_grafana 
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=tonikdemo
+    ports:
+      - "11223:3000"
+    networks:
+      - tonik_network
+
+  api:
+    build:
+      context: ..
+      dockerfile: grafana_example/Dockerfile_api
+    container_name: tonik_example_api
+    image: tonik_example_api
+    ports:
+      - "11222:8003"
+    networks:
+      - tonik_network
+
+networks:
+  tonik_network:
+    driver: bridge
