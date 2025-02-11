@@ -3,7 +3,7 @@ from os import PathLike
 from typing import Optional
 
 from .storage import Storage, Path
-from .utils import generate_test_data
+from .utils import generate_test_data, get_labels
 
 
 def get_data(filename: Optional[PathLike] = None) -> str:

@@ -10,7 +10,7 @@ import datashader as dsh
 import numpy as np
 import pandas as pd
 import uvicorn
-from cftime import date2num, num2date
+from cftime import date2num, num2pydate
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -37,6 +37,7 @@ class TonikAPI:
         self.app.get("/", response_class=HTMLResponse)(self.root)
         self.app.get("/feature")(self.feature)
         self.app.get("/inventory")(self.inventory)
+        self.app.get("/labels")(self.labels)
 
     def root(self):
         with open(get_data("package_data/index.html"), "r", encoding="utf-8") as file:
@@ -101,11 +102,12 @@ class TonikAPI:
             dates = np.tile(dates, freq.size)
             df = pd.DataFrame(
                 {'dates': dates, 'freqs': freqs, 'feature': vals})
+            df.dates = pd.to_datetime(df.dates.values).tz_localize('UTC')
             output = df.to_csv(index=False,
                                columns=['dates', 'freqs', 'feature'])
         else:
             df = pd.DataFrame(data=feat.to_pandas(), columns=[feat.name])
-            df['dates'] = df.index
+            df['dates'] = df.index.tz_localize('UTC')
             if resolution != 'full':
                 try:
                     current_resolution = pd.Timedelta(
@@ -138,7 +140,7 @@ class TonikAPI:
         agg = cvs.raster(source=feat)
         freq_dim = feat.dims[0]
         freq, d, spec = agg.coords[freq_dim].values, agg.coords['datetime'].values, agg.data
-        dates = num2date(
+        dates = num2pydate(
             d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
         return freq, dates, spec
 
@@ -156,7 +158,24 @@ class TonikAPI:
             return sg.to_dict()
         else:
             dir_contents = os.listdir(c.path)
+            if 'labels.json' in dir_contents:
+                dir_contents.remove('labels.json')
             return [fn.replace('.nc', '').replace('.zarr', '') for fn in dir_contents]
+
+    def labels(self, group: str, subdir: SubdirType = None, starttime: Optional[str] = None, endtime: Optional[str] = None):
+        _st = self.preprocess_datetime(starttime)
+        _et = self.preprocess_datetime(endtime)
+        sg = Storage(group, rootdir=self.rootdir,
+                     starttime=_st, endtime=_et, create=False)
+        try:
+            c = sg.get_substore(*subdir)
+        except TypeError:
+            c = sg
+        except FileNotFoundError:
+            msg = "Directory {} not found.".format(
+                '/'.join([sg.path] + subdir))
+            raise HTTPException(status_code=404, detail=msg)
+        return c.get_labels()
 
 
 def main(argv=None):

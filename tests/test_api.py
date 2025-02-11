@@ -226,3 +226,21 @@ def test_inventory(setup_api):
         txt = r.text
     result_test = json.loads(txt)
     assert sorted(test_features) == sorted(result_test)
+
+
+def test_labels(setup_api):
+    client, fq = setup_api
+    params = dict(group='volcanoes',
+                  subdir=['MDR', '00', 'BHZ'],
+                  starttime=str(fq.starttime),
+                  endtime=str(fq.endtime))
+    with client.stream("GET", "/labels", params=params) as r:
+        r.read()
+        txt = r.text
+    result = json.loads(txt)
+    assert 'time' in result['dsar'][0]
+    assert 'timeEnd' in result['dsar'][0]
+    assert 'title' in result['dsar'][0]
+    assert 'description' in result['dsar'][0]
+    assert 'tags' in result['dsar'][0]
+    assert 'id' in result['dsar'][0]

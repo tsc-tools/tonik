@@ -1,3 +1,4 @@
+import json
 import logging
 import logging.config
 import os
@@ -157,6 +158,30 @@ class Path(object):
         with xr.open_dataset(filename, group='original', engine=self.engine) as ds:
             return ds[feature].sizes
 
+    def save_labels(self, labels):
+        """
+        Save all labels. Labels are stored in a list of dictionaries with the following keys:
+        {
+            'time': 'time, or the beginning of the time window',
+            'timeEnd': 'end of the time window [optional]',
+            'title': 'title of the label',
+            'text': 'A more detailed description of the label',
+            'tags': 'tags to sort labels',
+            'id': 'unique id of the label'
+        }
+        """
+        filename = os.path.join(self.path, 'labels.json')
+        with open(filename, 'w') as f:
+            json.dump(labels, f)
+
+    def get_labels(self):
+        """
+        Load all labels.
+        """
+        filename = os.path.join(self.path, 'labels.json')
+        with open(filename) as f:
+            return json.load(f)
+
 
 class Storage(Path):
     """
@@ -238,7 +263,10 @@ class Storage(Path):
         if name.endswith('.zarr'):
             return name.replace('.zarr', '')
         elif os.path.isdir(path):
-            return {name: [Storage.directory_tree_to_dict(os.path.join(path, child)) for child in sorted(os.listdir(path))]}
+            dir_contents = os.listdir(path)
+            if 'labels.json' in dir_contents:
+                dir_contents.remove('labels.json')
+            return {name: [Storage.directory_tree_to_dict(os.path.join(path, child)) for child in sorted(dir_contents)]}
         else:
             if name.endswith('.nc'):
                 return name.replace('.nc', '')

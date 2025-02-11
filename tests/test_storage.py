@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 
@@ -5,8 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tonik import Storage
-from tonik.utils import generate_test_data
+from tonik import Storage, generate_test_data, get_labels
 
 
 def test_group(tmp_path_factory):
@@ -166,3 +166,18 @@ def test_shape(tmp_path_factory):
     rsam_shape = g1.shape('ssam')
     assert rsam_shape['datetime'] == 20
     assert rsam_shape['frequency'] == 10
+
+
+def test_labels(tmp_path_factory):
+    rootdir = tmp_path_factory.mktemp('data')
+    g = Storage('volcanoes', rootdir=rootdir)
+    tstart = datetime(2016, 1, 1)
+    xdf = generate_test_data(dim=1, intervals=100, tstart=tstart)
+    g.save_labels(get_labels(xdf.rsam, float(xdf.rsam.quantile(0.85))))
+    labels = g.get_labels()
+    assert 'time' in labels['rsam'][0]
+    assert 'timeEnd' in labels['rsam'][0]
+    assert 'title' in labels['rsam'][0]
+    assert 'description' in labels['rsam'][0]
+    assert 'tags' in labels['rsam'][0]
+    assert 'id' in labels['rsam'][0]

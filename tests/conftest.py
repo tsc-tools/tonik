@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from tonik import Storage, generate_test_data
+from tonik import Storage, generate_test_data, get_labels
 
 
 def pytest_addoption(parser):
@@ -55,6 +55,9 @@ def setup(tmp_path_factory):
                                   ndays=ndays)
         for _c in g.stores:
             _c.save(feat)
+            if _f == 'dsar':
+                _c.save_labels(get_labels(feat.dsar,
+                                          float(feat.dsar.quantile(0.85))))
     for _n, _f in features2D:
         feat = generate_test_data(tstart=tstart,
                                   feature_names=[_n],
