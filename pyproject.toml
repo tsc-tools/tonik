@@ -19,6 +19,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "dask<=2024.10.0",
     "h5py>=3.8",
     "datashader>=0.14",
     "xarray>=2023.4",
@@ -44,6 +45,7 @@ Issues = "https://github.com/tsc-tools/tonik/issues"
 
 [project.scripts]
 tonik_api = "tonik.api:main"
+test_data = "tonik.utils:main"
 
 [tool.pytest.ini_options]
 log_cli = true
