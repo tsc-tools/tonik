@@ -44,8 +44,6 @@
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#documentation">Documentation</a>
     </li>
-    <li class="toctree-l2"><a class="reference internal" href="#contributing">Contributing</a>
-    </li>
     <li class="toctree-l2"><a class="reference internal" href="#get-in-touch">Get in touch</a>
     </li>
     </ul>
@@ -53,6 +51,10 @@
               </ul>
               <ul>
                 <li class="toctree-l1"><a class="reference internal" href="tonik_example/">User Guide</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="grafana_integration/">Grafana Integration</a>
                 </li>
               </ul>
       </div>
@@ -79,8 +81,8 @@
             <div class="section" itemprop="articleBody">
               
                 <h1 id="tonik">Tonik</h1>
-<p>Tonik provides you with a solution to store and retrieve scientific data as well as serving it through an API.
-For visualisations, the API can serve large requests very quickly by downsampling the data to the requested resolution on demand.</p>
+<p>Tonik provides you with a solution to store and retrieve scientific time-series data as well as serving it through an API.
+For visualisations, the API can serve large requests very quickly by downsampling the data to the requested resolution on demand. The API was optimised to visualise time-series and data labels with <a href="https://grafana.com/oss/grafana/">Grafana</a>.</p>
 <h2 id="requirements">Requirements</h2>
 <ul>
 <li>h5py</li>
@@ -92,17 +94,16 @@ For visualisations, the API can serve large requests very quickly by downsamplin
 <li>python-json-logger</li>
 <li>uvicorn</li>
 <li>fastapi</li>
+<li>matplotlib (only needed to reproduce the examples in the user guide)</li>
 </ul>
 <h2 id="installation">Installation</h2>
 <pre><code>pip install -U tonik
 </code></pre>
 <h2 id="documentation">Documentation</h2>
 <p>Learn more about tonik in its official <a href="https://tsc-tools.github.io/tonik.github.io/">documentation</a>
-Try out an <a href="https://github.com/tsc-tools/tonik/tree/main/examples">interactive Jupyter notebook</a></p>
-<h2 id="contributing">Contributing</h2>
-<p>You can find information about contributing to tonik at our [Contributing page]</p>
+Try out a <a href="https://github.com/tsc-tools/tonik/blob/main/docs/tonik_example.ipynb">Jupyter notebook</a></p>
 <h2 id="get-in-touch">Get in touch</h2>
-<p>Report bugs, suggest features, view the source code, and ask questions <a href="https://github.com/tsc-tools/tonik">on GitHub</a>.</p>
+<p>Report bugs, suggest features, view the source code, and ask questions <a href="https://github.com/tsc-tools/tonik/issues">on GitHub</a>.</p>
               
             </div>
           </div><footer>
@@ -150,5 +151,5 @@ Try out an <a href="https://github.com/tsc-tools/tonik/tree/main/examples">inter
 
 <!--
 MkDocs version : 1.6.0
-Build Date UTC : 2024-10-01 01:55:53.657003+00:00
+Build Date UTC : 2025-02-12 01:37:26.078399+00:00
 -->
