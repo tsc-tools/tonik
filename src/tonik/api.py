@@ -58,16 +58,16 @@ class TonikAPI:
         dt = dt.replace(tzinfo=None)
         return dt
 
-    def feature(self,
-                group: str,
-                name: str,
-                starttime: Union[str, None],
-                endtime: Union[str, None],
-                subdir: SubdirType = None,
-                resolution: str = 'full',
-                verticalres: int = 10,
-                log: bool = False,
-                normalise: bool = False):
+    async def feature(self,
+                      group: str,
+                      name: str,
+                      starttime: Union[str, None],
+                      endtime: Union[str, None],
+                      subdir: SubdirType = None,
+                      resolution: str = 'full',
+                      verticalres: int = 10,
+                      log: bool = False,
+                      normalise: bool = False):
         _st = self.preprocess_datetime(starttime)
         _et = self.preprocess_datetime(endtime)
         g = Storage(group, rootdir=self.rootdir,
@@ -102,22 +102,24 @@ class TonikAPI:
             dates = np.tile(dates, freq.size)
             df = pd.DataFrame(
                 {'dates': dates, 'freqs': freqs, 'feature': vals})
-            df.dates = pd.to_datetime(df.dates.values).tz_localize('UTC')
+            df['dates'] = pd.to_datetime(df.dates.values).strftime(
+                '%Y-%m-%dT%H:%M:%SZ')
             output = df.to_csv(index=False,
                                columns=['dates', 'freqs', 'feature'])
         else:
             df = pd.DataFrame(data=feat.to_pandas(), columns=[feat.name])
-            df['dates'] = df.index.tz_localize('UTC')
+            df['dates'] = df.index
             if resolution != 'full':
                 try:
                     current_resolution = pd.Timedelta(
                         df['dates'].diff().mean())
                     if current_resolution < pd.Timedelta(resolution):
-                        df = df.resample(pd.Timedelta(resolution)).mean()
+                        df = df.resample(pd.Timedelta(resolution)).median()
                 except ValueError:
                     logger.warning(
                         f"Cannot resample {feat.name} to {resolution}: e")
             df.rename(columns={feat.name: 'feature'}, inplace=True)
+            df['dates'] = df['dates'].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
             output = df.to_csv(index=False, columns=['dates', 'feature'])
         return StreamingResponse(iter([output]),
                                  media_type='text/csv',
@@ -144,7 +146,7 @@ class TonikAPI:
             d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
         return freq, dates, spec
 
-    def inventory(self, group: str, subdir: SubdirType = None, tree: bool = True) -> InventoryReturnType:
+    async def inventory(self, group: str, subdir: SubdirType = None, tree: bool = True) -> InventoryReturnType:
         sg = Storage(group, rootdir=self.rootdir, create=False)
         try:
             c = sg.get_substore(*subdir)
@@ -162,7 +164,7 @@ class TonikAPI:
                 dir_contents.remove('labels.json')
             return [fn.replace('.nc', '').replace('.zarr', '') for fn in dir_contents]
 
-    def labels(self, group: str, subdir: SubdirType = None, starttime: Optional[str] = None, endtime: Optional[str] = None):
+    async def labels(self, group: str, subdir: SubdirType = None, starttime: Optional[str] = None, endtime: Optional[str] = None):
         _st = self.preprocess_datetime(starttime)
         _et = self.preprocess_datetime(endtime)
         sg = Storage(group, rootdir=self.rootdir,
