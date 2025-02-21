@@ -2,7 +2,11 @@ import logging
 import os
 
 import xarray as xr
-from zarr.errors import PathNotFoundError
+try:
+    from zarr.errors import PathNotFoundError
+except ImportError:
+    class PathNotFoundError(Exception):
+        pass
 
 from .utils import merge_arrays
 

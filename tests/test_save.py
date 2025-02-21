@@ -7,6 +7,7 @@ import xarray as xr
 
 from tonik import Storage, generate_test_data
 from tonik.xarray2netcdf import xarray2netcdf
+from tonik.xarray2zarr import xarray2zarr
 
 
 def test_xarray2netcdf(tmp_path_factory):
@@ -302,3 +303,13 @@ def test_xarray2zarr_overwrite(tmp_path_factory):
             xdf_test.values, xdf1.rsam.values)
     np.testing.assert_array_equal(
         xdf_test.datetime.values, xdf1.datetime.values)
+
+
+def test_xarray2zarr_errors(tmp_path_factory):
+    temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
+    start = datetime(2022, 7, 18, 8, 0, 0)
+    xdf = generate_test_data(dim=1, intervals=3, freq='1h', tstart=start)
+    for feature in xdf.data_vars.keys():
+        xdf[feature].to_zarr(os.path.join(temp_dir, feature + '.zarr'),
+                             mode='w')
+    xarray2zarr(xdf, temp_dir, mode='a')
