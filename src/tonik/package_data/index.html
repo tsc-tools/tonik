@@ -1,93 +1,164 @@
+<!-- TonikAPI index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tonik API Documentation</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f5f5f5;
-        }
-        header {
-            background-color: #333;
-            color: white;
-            text-align: center;
-            padding: 1em;
-        }
-        section {
-            max-width: 800px;
-            margin: 2em auto;
-            padding: 2em;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            color: #333;
-        }
-        p {
-            line-height: 1.6;
-            color: #666;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>TonikAPI</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background-color: #f9f9f9;
+      line-height: 1.6;
+    }
+    header {
+      background-color: #007ACC;
+      color: #fff;
+      padding: 20px;
+      text-align: center;
+      border-radius: 8px;
+    }
+    section {
+      background-color: #fff;
+      margin-top: 20px;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h2 {
+      color: #007ACC;
+    }
+    code {
+      background-color: #eef;
+      padding: 2px 4px;
+      border-radius: 4px;
+    }
+    pre {
+      background-color: #eef;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
+    }
+    a.button {
+      display: inline-block;
+      padding: 10px 15px;
+      margin: 5px 0;
+      font-size: 14px;
+      text-decoration: none;
+      background-color: #007ACC;
+      color: #fff;
+      border-radius: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    footer {
+      text-align: center;
+      margin-top: 40px;
+      color: #666;
+      font-size: 0.9em;
+    }
+  </style>
 </head>
 <body>
+  <header>
+    <h1>TonikAPI</h1>
+    <p>Query, transform, and extract features from multidimensional data stores</p>
+  </header>
 
-<header>
-    <h1>Tonik</h1>
-    <p>Tonik - API</p>
-</header>
-
-<section>
+  <section>
     <h2>Overview</h2>
     <p>
-        Welcome to the documentation for the Tonik API. This API provides access to time-series stored with the tonik package.
+      TonikAPI is designed for efficient retrieval, transformation, and feature extraction of time-series and spectrogram-like data stored in hierarchical formats. It supports subdirectory traversal, resampling, log-scaling, and normalization.
     </p>
-
-    <h2>Endpoints</h2>
     <p>
-        The endpoints available in the API are:
+      This API is especially suited for applications in seismology, geophysics, and related fields.
     </p>
-    <ul>
-        <li><strong>GET /feature:</strong> Request time-series data.</li>
-        <li><strong>GET /inventory:</strong> Request information on data.</li>
-    </ul>
+  </section>
 
-    <h2>Code Examples</h2>
-    <h3>Requesting meta data</h3>
-    The following will return information on available datasets in JSON format.
-    <pre>
-        curl -X GET "http://your.host.server:yourport/inventory"
-    </pre>
-    To do the same with Python using requests you can use the following code:
-    <pre>
-        import requests
-        url = "http://your.host.server:yourport/inventory"
-        response = requests.get(url)
-        response.json()
-    </pre>
-    <h3>Requesting data</h3>
-    The following example shows how to request RSAM data for station WIZ at volcano Whakaari
-    between 2019-12-01 and 2019-12-31. The return format is CSV.
-    <pre>
-    curl -X GET "http://your.host.server:yourport/feature?name=rsam&starttime=2019-12-01T00:00:00&endtime=2019-12-31T00:00:00&subdir=Whakaari&subdir=WIZ"
-    </pre>
-    To do the same with Python using pandas you can use the following code:
-    <pre>
-        import pandas as pd
-        feature="rsam"
-        starttime="2019-12-01T00:00:00"
-        endtime="2019-12-31T00:00:00"
-        volcano="Whakaari"
-        site="WIZ"
-        url = f"http://your.host.server:yourport/feature?name={feature}&starttime={starttime}&endtime={endtime}&subdir={volcano}&subdir={site}"
-        pd.read_csv(url, parse_dates=True, index_col=0)
-    </pre>
-</section>
-</section>
+  <section>
+    <h2>Endpoints</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Endpoint</th>
+          <th>Method</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>/feature</code></td>
+          <td>GET</td>
+          <td>Returns time series or spectrogram features for a given group, variable, and time range.</td>
+        </tr>
+        <tr>
+          <td><code>/inventory</code></td>
+          <td>GET</td>
+          <td>Lists available datasets or subdirectories within a group.</td>
+        </tr>
+        <tr>
+          <td><code>/labels</code></td>
+          <td>GET</td>
+          <td>Fetches labels associated with a dataset for a specified time range.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
 
+  <section>
+    <h2>Feature Request Example</h2>
+    <p>Example query for retrieving a feature:</p>
+    <pre>GET /feature?group=testgroup&amp;name=rms&amp;starttime=2023-01-01T00:00:00&amp;endtime=2023-01-02T00:00:00&amp;resolution=1h&amp;log=true&amp;normalise=true</pre>
+    <p>
+      <a class="button" href="#" onclick="alert('Simulate API call using curl or your browser.')">Try Feature Query</a>
+    </p>
+    <pre>curl "http://localhost:8003/feature?group=testgroup&amp;name=rms&amp;starttime=2023-01-01T00:00:00&amp;endtime=2023-01-02T00:00:00&amp;resolution=1h&amp;log=true&amp;normalise=true"</pre>
+  </section>
+
+  <section>
+    <h2>Inventory and Labels</h2>
+    <p>Query inventory of datasets:</p>
+    <pre>GET /inventory?group=testgroup</pre>
+    <p>Query labels for a dataset:</p>
+    <pre>GET /labels?group=testgroup&amp;starttime=2023-01-01T00:00:00&amp;endtime=2023-01-02T00:00:00</pre>
+  </section>
+
+  <section>
+    <h2>Python Example</h2>
+    <p>You can query the TonikAPI directly from Python using <code>requests</code>:</p>
+    <pre><code>import requests
+
+params = {
+    "group": "testgroup",
+    "name": "rms",
+    "starttime": "2023-01-01T00:00:00",
+    "endtime": "2023-01-02T00:00:00",
+    "resolution": "1h",
+    "log": "true",
+    "normalise": "true"
+}
+
+response = requests.get("http://localhost:8003/feature", params=params)
+with open("rms_feature.csv", "w") as f:
+    f.write(response.text)
+</code></pre>
+  </section>
+
+  <footer>
+    <p>&copy; 2025 TonikAPI. Built with precision using FastAPI + Pandas + Xarray.</p>
+  </footer>
 </body>
 </html>
