@@ -6,7 +6,7 @@ The [repo](https://github.com/tsc-tools/tonik) contains a Grafana
 [example](https://github.com/tsc-tools/tonik/tree/main/grafana_example) that demonstrates
 an example setup using [docker-compose](https://docs.docker.com/compose/).
 
-To run the example you first have to install [docker](https://docs.docker.com/get-started/get-docker/) and [docker-compose](https://docs.docker.com/compose/install/). Then get a local copy of the repository by running:
+To run the example you first have to install [docker](https://docs.docker.com/get-started/get-docker/) and [docker-compose](https://docs.docker.com/compose/install/). If you don't want to run docker with `sudo` follow the docker postinstall instructions [here](https://docs.docker.com/engine/install/linux-postinstall/). Then get a local copy of the repository by running:
 
 ```
 git clone --depth=1 https://github.com/tsc-tools/tonik.git
