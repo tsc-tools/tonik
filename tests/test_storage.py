@@ -181,3 +181,14 @@ def test_labels(tmp_path_factory):
     assert 'description' in labels['rsam'][0]
     assert 'tags' in labels['rsam'][0]
     assert 'id' in labels['rsam'][0]
+
+
+def test_attributes_only(tmp_path_factory):
+    rootdir = tmp_path_factory.mktemp('data')
+    g = Storage('volcanoes', rootdir=rootdir)
+    tstart = datetime(2016, 1, 1)
+    xdf = generate_test_data(dim=1, intervals=20, tstart=tstart)
+    g.save(xdf, mode='w', archive_starttime=tstart)
+    ret = g('rsam', attributes_only=True)
+    assert isinstance(ret, dict)
+    assert len(ret.keys()) == 8

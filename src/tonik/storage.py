@@ -112,7 +112,7 @@ class Path(object):
             self.children[feature] = Path(feature + file_ending, self.path)
         return _feature_path
 
-    def __call__(self, feature, group='original'):
+    def __call__(self, feature, group='original', attributes_only=False):
         """
         Request a particular feature
 
@@ -120,10 +120,14 @@ class Path(object):
         :type feature: str
 
         """
+        filename = self.feature_path(feature)
+
+        if attributes_only:
+            with xr.open_dataset(filename, group=group, engine=self.engine) as ds:
+                return ds.attrs
+
         if self.endtime < self.starttime:
             raise ValueError('Startime has to be smaller than endtime.')
-
-        filename = self.feature_path(feature)
 
         logger.debug(
             f"Reading feature {feature} between {self.starttime} and {self.endtime}")
