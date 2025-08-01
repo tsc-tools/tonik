@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 import numpy as np
 import pytest
 import xarray as xr
+import pandas as pd
 
 from tonik import Storage, generate_test_data
 from tonik.xarray2netcdf import xarray2netcdf
@@ -313,3 +314,43 @@ def test_xarray2zarr_errors(tmp_path_factory):
         xdf[feature].to_zarr(os.path.join(temp_dir, feature + '.zarr'),
                              mode='w')
     xarray2zarr(xdf, temp_dir, mode='a')
+
+
+def test_xarray2zarr_high_dimensionality(tmp_path_factory):
+    """
+    Test writing xarray data to zarr with more than 2 dimensions.
+    """
+    tempdir = tmp_path_factory.mktemp('test_xarray2zarr_high_dimensionality')
+    test_data = xr.DataArray(
+        np.random.rand(143, 3, 24, 6),
+        dims=['datetime', 'channel', 'order_1', 'order_2'],
+        coords={
+            'datetime': pd.date_range(start='2022-07-18', periods=143, freq='10min'),
+            'channel': np.arange(3),
+            'order_1': np.arange(24),
+            'order_2': np.arange(6)
+        },
+    )
+    test_data_2 = xr.DataArray(
+        np.random.rand(10, 3, 24, 6),
+        dims=['datetime', 'channel', 'order_1', 'order_2'],
+        coords={
+            'datetime': pd.date_range(start='2022-07-20', periods=10, freq='10min'),
+            'channel': np.arange(3),
+            'order_1': np.arange(24),
+            'order_2': np.arange(6)
+        },
+    )
+
+    xds = xr.Dataset({'order2': test_data})
+    xarray2zarr(xds, tempdir)
+
+    xds2 = xr.Dataset({'order2': test_data_2})
+    xarray2zarr(xds2, tempdir, 'a')
+    xds_test = xr.open_zarr(os.path.join(
+        tempdir, 'order2.zarr'), group='original')
+    np.testing.assert_array_equal(xds_test['order2'].isel(
+        dict(datetime=slice(-10, None, None))).values, xds2['order2'].values)
+    np.testing.assert_array_equal(xds_test['order2'].isel(
+        dict(datetime=slice(0, 10, None))).values,
+        xds['order2'].isel(dict(datetime=slice(0, 10, None))).values)
