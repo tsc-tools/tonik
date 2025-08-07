@@ -1,7 +1,11 @@
 from datetime import datetime
 
-import pytest
+
 from fastapi.testclient import TestClient
+import numpy as np
+import pandas as pd
+import pytest
+import xarray as xr
 
 from tonik import Storage, generate_test_data, get_labels
 
@@ -87,3 +91,29 @@ def setup_api(setup):
     g.starttime = datetime(2023, 1, 1)
     g.endtime = datetime(2023, 1, 6)
     return client, g.get_substore('MDR', '00', 'BHZ')
+
+
+@pytest.fixture(scope='module')
+def setup_multi_dimensional(tmp_path_factory):
+    tempdir = tmp_path_factory.mktemp('test_xarray2zarr_high_dimensionality')
+    test_data = xr.DataArray(
+        np.random.rand(143, 3, 24, 6),
+        dims=['datetime', 'channel', 'order_1', 'order_2'],
+        coords={
+            'datetime': pd.date_range(start='2022-07-18', periods=143, freq='10min'),
+            'channel': np.arange(3),
+            'order_1': np.arange(24),
+            'order_2': np.arange(6)
+        },
+    )
+    test_data_2 = xr.DataArray(
+        np.random.rand(10, 3, 24, 6),
+        dims=['datetime', 'channel', 'order_1', 'order_2'],
+        coords={
+            'datetime': pd.date_range(start='2022-07-20', periods=10, freq='10min'),
+            'channel': np.arange(3),
+            'order_1': np.arange(24),
+            'order_2': np.arange(6)
+        },
+    )
+    return tempdir, test_data, test_data_2

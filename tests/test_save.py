@@ -312,36 +312,15 @@ def test_xarray2zarr_errors(tmp_path_factory):
     xdf = generate_test_data(dim=1, intervals=3, freq='1h', tstart=start)
     for feature in xdf.data_vars.keys():
         xdf[feature].to_zarr(os.path.join(temp_dir, feature + '.zarr'),
-                             mode='w')
+                             mode='w', group='original')
     xarray2zarr(xdf, temp_dir, mode='a')
 
 
-def test_xarray2zarr_high_dimensionality(tmp_path_factory):
+def test_xarray2zarr_high_dimensionality(setup_multi_dimensional):
     """
     Test writing xarray data to zarr with more than 2 dimensions.
     """
-    tempdir = tmp_path_factory.mktemp('test_xarray2zarr_high_dimensionality')
-    test_data = xr.DataArray(
-        np.random.rand(143, 3, 24, 6),
-        dims=['datetime', 'channel', 'order_1', 'order_2'],
-        coords={
-            'datetime': pd.date_range(start='2022-07-18', periods=143, freq='10min'),
-            'channel': np.arange(3),
-            'order_1': np.arange(24),
-            'order_2': np.arange(6)
-        },
-    )
-    test_data_2 = xr.DataArray(
-        np.random.rand(10, 3, 24, 6),
-        dims=['datetime', 'channel', 'order_1', 'order_2'],
-        coords={
-            'datetime': pd.date_range(start='2022-07-20', periods=10, freq='10min'),
-            'channel': np.arange(3),
-            'order_1': np.arange(24),
-            'order_2': np.arange(6)
-        },
-    )
-
+    tempdir, test_data, test_data_2 = setup_multi_dimensional
     xds = xr.Dataset({'order2': test_data})
     xarray2zarr(xds, tempdir)
 
@@ -354,3 +333,29 @@ def test_xarray2zarr_high_dimensionality(tmp_path_factory):
     np.testing.assert_array_equal(xds_test['order2'].isel(
         dict(datetime=slice(0, 10, None))).values,
         xds['order2'].isel(dict(datetime=slice(0, 10, None))).values)
+
+
+def test_xarray2zarr_high_dimensionality_filled_gaps(setup_multi_dimensional):
+    """
+    Test writing xarray data to zarr with more than 2 dimensions.
+    """
+    tempdir, test_data, test_data_2 = setup_multi_dimensional
+    xds = xr.Dataset({'order2': test_data})
+    xarray2zarr(xds, tempdir, fill_gaps=True)
+
+    xds2 = xr.Dataset({'order2': test_data_2})
+    xarray2zarr(xds2, tempdir, fill_gaps=True)
+    xds_test = xr.open_zarr(os.path.join(
+        tempdir, 'order2.zarr'), group='original')
+    np.testing.assert_array_equal(xds_test['order2'].isel(
+        dict(datetime=slice(-10, None, None))).values, xds2['order2'].values)
+    np.testing.assert_array_equal(xds_test['order2'].isel(
+        dict(datetime=slice(0, 10, None))).values,
+        xds['order2'].isel(dict(datetime=slice(0, 10, None))).values)
+    assert len(pd.date_range(
+        start=xds.datetime.values[0], end=xds2.datetime.values[-1], freq='10min')) == xds_test.order2.values.shape[0]
+    # default chunking is 1 chunk per day = 144 10 min samples
+    assert xds_test.chunks['datetime'] == (144, 144, 10)
+    # Check there are the correct numbers of NaNs filled in
+    assert xds_test.order2.values.shape[0] - (xds.order2.values.shape[0] + xds2.order2.values.shape[0]) == int(
+        xds_test.order2.isnull().values.sum()/np.prod(xds_test.order2.values.shape[1:]))
