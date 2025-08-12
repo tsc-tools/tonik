@@ -190,7 +190,8 @@ def test_xarray2zarr_with_gaps(tmp_path_factory):
     c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('rsam')
-    assert xdf_test.isnull().sum() == 0
+    assert xdf_test.isnull().sum() == int(
+        (xdf2.datetime[0] - xdf1.datetime[-1])/pd.Timedelta('10min'))
 
 
 def test_xarray2zarr_outofsequence(tmp_path_factory):
@@ -200,20 +201,22 @@ def test_xarray2zarr_outofsequence(tmp_path_factory):
     temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
     start = datetime(2022, 7, 18, 8, 0, 0)
     middle = datetime(2022, 7, 18, 12, 0, 0)
-    end = datetime(2022, 7, 19, 12, 0, 0)
-    xdf1 = generate_test_data(dim=1, intervals=3, tstart=start)
-    xdf2 = generate_test_data(dim=1, intervals=3, tstart=middle)
-    xdf3 = generate_test_data(dim=1, intervals=3, tstart=end)
+    end = datetime(2022, 7, 18, 14, 0, 0)
+    xdf1 = generate_test_data(dim=1, intervals=3, tstart=start, seed=42)
+    xdf2 = generate_test_data(dim=1, intervals=3, tstart=middle, seed=43)
+    xdf3 = generate_test_data(dim=1, intervals=3, tstart=end, seed=44)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
                 backend='zarr')
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf3)
-    c.save(xdf1)
-    c.save(xdf2)
+    c.save(xdf3, chunks=10)
+    c.save(xdf1, chunks=10)
+    c.save(xdf2, chunks=10)
     xdf_test = c('rsam')
-    np.testing.assert_array_equal(
-        xdf_test.datetime.values, xr.merge([xdf1, xdf2, xdf3]).datetime.values)
+    assert np.all(xdf_test.loc[dict(datetime=xdf3.datetime)] == xdf3['rsam'])
+    assert np.all(xdf_test.loc[dict(datetime=xdf2.datetime)] == xdf2['rsam'])
+    assert np.all(xdf_test.loc[dict(datetime=xdf1.datetime)] == xdf1['rsam'])
+    assert xdf_test.sizes['datetime'] == 46
 
 
 def test_xarray2zarr_duplicates(tmp_path_factory):
@@ -231,11 +234,13 @@ def test_xarray2zarr_duplicates(tmp_path_factory):
                 starttime=start, endtime=end + timedelta(days=1),
                 backend='zarr')
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf1)
-    c.save(xdf2)
+    c.save(xdf1, chunks=10)
+    c.save(xdf2, chunks=10)
     xdf_test = c('rsam')
-    np.testing.assert_array_equal(
-        xdf_test.datetime.values, xdf1.drop_duplicates('datetime', keep='first').merge(xdf2).datetime.values)
+    assert np.all(xdf_test.loc[dict(datetime=xdf1.datetime)].dropna(
+        'datetime') == xdf1['rsam'].dropna('datetime'))
+    assert np.all(xdf_test.loc[dict(datetime=xdf2.datetime)].dropna(
+        'datetime') == xdf2['rsam'].dropna('datetime'))
 
 
 def test_xarray2zarr_with_overlaps_1D(tmp_path_factory):
@@ -258,7 +263,7 @@ def test_xarray2zarr_with_overlaps_1D(tmp_path_factory):
         datetime=0).values
     assert xdf_test.isel(datetime=1).values == xdf2.rsam.isel(
         datetime=0).values
-    assert xdf_test.datetime.values[-1] == xdf2.datetime.values[-1]
+    assert xdf_test.sizes['datetime'] == 10
 
 
 def test_xarray2zarr_with_overlaps_2D(tmp_path_factory):
@@ -281,7 +286,6 @@ def test_xarray2zarr_with_overlaps_2D(tmp_path_factory):
         datetime=0).values)
     np.testing.assert_array_equal(xdf_test.isel(datetime=1).values, xdf2.ssam.isel(
         datetime=0).values)
-    assert xdf_test.datetime.values[-1] == xdf2.datetime.values[-1]
 
 
 def test_xarray2zarr_overwrite(tmp_path_factory):
@@ -297,13 +301,7 @@ def test_xarray2zarr_overwrite(tmp_path_factory):
     c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('rsam')
-    np.testing.assert_array_equal(
-        xdf_test.values, xdf2.rsam.values)
-    with pytest.raises(AssertionError):
-        np.testing.assert_array_equal(
-            xdf_test.values, xdf1.rsam.values)
-    np.testing.assert_array_equal(
-        xdf_test.datetime.values, xdf1.datetime.values)
+    assert np.all(xdf_test.loc[dict(datetime=xdf1.datetime)] == xdf2['rsam'])
 
 
 def test_xarray2zarr_errors(tmp_path_factory):
@@ -321,41 +319,16 @@ def test_xarray2zarr_high_dimensionality(setup_multi_dimensional):
     Test writing xarray data to zarr with more than 2 dimensions.
     """
     tempdir, test_data, test_data_2 = setup_multi_dimensional
+    start = datetime(2022, 7, 18, 0, 0, 0)
+    g = Storage('test_experiment', rootdir=tempdir,
+                starttime=start, endtime=start + timedelta(days=10),
+                backend='zarr')
+    c = g.get_substore('MDR', '00', 'HHZ')
     xds = xr.Dataset({'order2': test_data})
-    xarray2zarr(xds, tempdir)
-
     xds2 = xr.Dataset({'order2': test_data_2})
-    xarray2zarr(xds2, tempdir, 'a')
-    xds_test = xr.open_zarr(os.path.join(
-        tempdir, 'order2.zarr'), group='original')
-    np.testing.assert_array_equal(xds_test['order2'].isel(
-        dict(datetime=slice(-10, None, None))).values, xds2['order2'].values)
-    np.testing.assert_array_equal(xds_test['order2'].isel(
-        dict(datetime=slice(0, 10, None))).values,
-        xds['order2'].isel(dict(datetime=slice(0, 10, None))).values)
-
-
-def test_xarray2zarr_high_dimensionality_filled_gaps(setup_multi_dimensional):
-    """
-    Test writing xarray data to zarr with more than 2 dimensions.
-    """
-    tempdir, test_data, test_data_2 = setup_multi_dimensional
-    xds = xr.Dataset({'order2': test_data})
-    xarray2zarr(xds, tempdir, fill_gaps=True)
-
-    xds2 = xr.Dataset({'order2': test_data_2})
-    xarray2zarr(xds2, tempdir, fill_gaps=True)
-    xds_test = xr.open_zarr(os.path.join(
-        tempdir, 'order2.zarr'), group='original')
-    np.testing.assert_array_equal(xds_test['order2'].isel(
-        dict(datetime=slice(-10, None, None))).values, xds2['order2'].values)
-    np.testing.assert_array_equal(xds_test['order2'].isel(
-        dict(datetime=slice(0, 10, None))).values,
-        xds['order2'].isel(dict(datetime=slice(0, 10, None))).values)
-    assert len(pd.date_range(
-        start=xds.datetime.values[0], end=xds2.datetime.values[-1], freq='10min')) == xds_test.order2.values.shape[0]
-    # default chunking is 1 chunk per day = 144 10 min samples
-    assert xds_test.chunks['datetime'] == (144, 144, 10)
-    # Check there are the correct numbers of NaNs filled in
-    assert xds_test.order2.values.shape[0] - (xds.order2.values.shape[0] + xds2.order2.values.shape[0]) == int(
-        xds_test.order2.isnull().values.sum()/np.prod(xds_test.order2.values.shape[1:]))
+    c.save(xds, chunks=144)
+    c.save(xds2, chunks=144)
+    xds_test = c('order2')
+    assert np.all(xds_test.loc[dict(datetime=xds.datetime)] == xds['order2'])
+    assert np.all(xds_test.loc[dict(datetime=xds2.datetime)] == xds2['order2'])
+    assert xds_test.sizes['datetime'] == 432

@@ -59,8 +59,55 @@ def generate_test_data(dim=1, ndays=30, nfreqs=10,
     return xds
 
 
+def get_dt(times):
+    """
+    Infer the sampling of the time dimension.
+    """
+    pd_times = pd.to_datetime(times)
+    dt = pd.infer_freq(pd_times)
+    if dt is None:
+        dt = pd_times.diff().median()
+    try:
+        dt = pd.Timedelta(dt)
+    except ValueError:
+        dt = pd.Timedelta(f"1{dt}")
+    return dt
+
+
+def fill_time_gaps(xds: xr.Dataset, timedim: str = 'datetime') -> xr.Dataset:
+    """
+    Fill gaps in time series with NaN values by reindexing to a complete datetime range.
+
+    Parameters
+    ----------
+    xds : xr.Dataset
+        Input dataset with potential time gaps
+    freq : str, optional
+        Frequency string (e.g., 'H', 'D', '15min'). If None, will try to infer.
+    timedim : str
+        Name of the time dimension, by default 'datetime'
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset with gaps filled with NaN
+    """
+    if timedim not in xds.coords:
+        raise ValueError(
+            f"{timedim} coordinate not found in dataset coordinates.")
+
+    # Infer sample interval
+    dt = get_dt(xds.coords[timedim])
+    start_time = xds[timedim].values[0]
+    end_time = xds[timedim].values[-1]
+    complete_time = pd.date_range(start=start_time, end=end_time, freq=dt)
+
+    # Reindex to fill gaps with NaN
+    return xds.reindex({timedim: complete_time})
+
+
 def merge_arrays(xds_old: xr.DataArray, xds_new: xr.DataArray,
-                 resolution: float = None) -> xr.DataArray:
+                 timedim: str = 'datetime', resolution: float = None) -> xr.DataArray:
     """
     Merge two xarray datasets with the same datetime index.
 
@@ -79,16 +126,17 @@ def merge_arrays(xds_old: xr.DataArray, xds_new: xr.DataArray,
         Merged array.
     """
     xda_old = xds_old.drop_duplicates(
-        'datetime', keep='last')
+        timedim, keep='last')
     xda_new = xds_new.drop_duplicates(
-        'datetime', keep='last')
+        timedim, keep='last')
     xda_new = xda_new.combine_first(xda_old)
     if resolution is not None:
         new_dates = pd.date_range(
-            xda_new.datetime.values[0],
-            xda_new.datetime.values[-1],
+            xda_new[timedim].values[0],
+            xda_new[timedim].values[-1],
             freq=f'{resolution}h')
-        xda_new = xda_new.reindex(datetime=new_dates)
+        xda_new = xda_new.reindex(dict(timedim=new_dates))
+    xda_new = fill_time_gaps(xda_new, timedim=timedim)
     return xda_new
 
 
