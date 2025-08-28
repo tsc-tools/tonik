@@ -26,8 +26,9 @@ InventoryReturnType = Union[list, dict]
 
 class TonikAPI:
 
-    def __init__(self, rootdir) -> None:
+    def __init__(self, rootdir, backend='netcdf') -> None:
         self.rootdir = rootdir
+        self.backend = backend
         self.app = FastAPI()
 
         # -- allow any origin to query API
@@ -72,7 +73,7 @@ class TonikAPI:
         _et = self.preprocess_datetime(endtime)
         g = Storage(group, rootdir=self.rootdir,
                     starttime=_st, endtime=_et,
-                    create=False)
+                    create=False, backend=self.backend)
         c = g
         if subdir:
             c = g.get_substore(*subdir)
@@ -147,7 +148,8 @@ class TonikAPI:
         return freq, dates, spec
 
     async def inventory(self, group: str, subdir: SubdirType = None, tree: bool = True) -> InventoryReturnType:
-        sg = Storage(group, rootdir=self.rootdir, create=False)
+        sg = Storage(group, rootdir=self.rootdir,
+                     create=False, backend=self.backend)
         try:
             c = sg.get_substore(*subdir)
         except TypeError:
@@ -168,7 +170,8 @@ class TonikAPI:
         _st = self.preprocess_datetime(starttime)
         _et = self.preprocess_datetime(endtime)
         sg = Storage(group, rootdir=self.rootdir,
-                     starttime=_st, endtime=_et, create=False)
+                     starttime=_st, endtime=_et, create=False,
+                     backend=self.backend)
         try:
             c = sg.get_substore(*subdir)
         except TypeError:
@@ -183,10 +186,11 @@ class TonikAPI:
 def main(argv=None):
     parser = ArgumentParser()
     parser.add_argument("--rootdir", default='/tmp')
+    parser.add_argument("--backend", default='netcdf')
     parser.add_argument("-p", "--port", default=8003, type=int)
     parser.add_argument("--host", default='0.0.0.0')
     args = parser.parse_args(argv)
-    ta = TonikAPI(args.rootdir)
+    ta = TonikAPI(args.rootdir, backend=args.backend)
     uvicorn.run(ta.app, host=args.host, port=args.port)
 
 

@@ -94,6 +94,26 @@ def setup_api(setup):
 
 
 @pytest.fixture(scope='module')
+def setup_api_zarr(tmp_path_factory):
+    savedir = tmp_path_factory.mktemp('vumt_test_tmp_zarr', numbered=True)
+    g = Storage('volcanoes', rootdir=savedir, backend='zarr')
+    from tonik.api import TonikAPI
+    ta = TonikAPI(str(savedir), backend='zarr')
+    client = TestClient(ta.app)
+    g.starttime = datetime(2023, 1, 1)
+    g.endtime = datetime(2023, 1, 6)
+    feat = generate_test_data(tstart=tstart,
+                              feature_names=['ssam'],
+                              ndays=ndays,
+                              nfreqs=8,
+                              freq_names=['frequency'],
+                              dim=2)
+    c = g.get_substore('MDR', '00', 'BHZ')
+    c.save(feat)
+    return client, c
+
+
+@pytest.fixture(scope='module')
 def setup_multi_dimensional(tmp_path_factory):
     tempdir = tmp_path_factory.mktemp('test_xarray2zarr_high_dimensionality')
     test_data = xr.DataArray(

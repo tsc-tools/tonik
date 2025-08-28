@@ -96,6 +96,36 @@ def test_read_ssam(setup_api):
     assert len(np.unique(df['freqs'])) == 8
 
 
+def test_read_ssam_from_zarr(setup_api_zarr):
+    client, l = setup_api_zarr
+    params = dict(name='ssam',
+                  group='volcanoes',
+                  subdir=['MDR', '00', 'BHZ'],
+                  starttime=str(l.starttime),
+                  endtime=str(l.endtime),
+                  resolution='full',
+                  log=False)
+    with client.stream("GET", "/feature", params=params) as r:
+        r.read()
+        txt = r.text
+    df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
+    np.testing.assert_array_almost_equal(df['feature'].values,
+                                         l('ssam').values.ravel(order='C'))
+
+    params = dict(name='ssam',
+                  group='volcanoes',
+                  subdir=['MDR', '00', 'BHZ'],
+                  starttime=str(l.starttime),
+                  endtime=str(l.endtime),
+                  resolution='1D')
+    with client.stream("GET", "/feature", params=params) as r:
+        r.read()
+        txt = r.text
+    df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
+    assert len(np.unique(df.index)) == 5
+    assert len(np.unique(df['freqs'])) == 8
+
+
 def test_read_filterbank(setup_api):
     client, l = setup_api
     params = dict(name='filterbank',
