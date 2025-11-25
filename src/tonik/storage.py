@@ -112,7 +112,7 @@ class Path(object):
             self.children[feature] = Path(feature + file_ending, self.path)
         return _feature_path
 
-    def __call__(self, feature, group='original', attributes_only=False):
+    def __call__(self, feature, group='original', metadata=False):
         """
         Request a particular feature
 
@@ -122,9 +122,9 @@ class Path(object):
         """
         filename = self.feature_path(feature)
 
-        if attributes_only:
-            with xr.open_dataset(filename, group=group, engine=self.engine) as ds:
-                return ds.attrs
+        if metadata:
+            with xr.open_dataset(filename, group='meta', engine=self.engine) as ds:
+                return ds
 
         if self.endtime < self.starttime:
             raise ValueError('Startime has to be smaller than endtime.')

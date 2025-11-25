@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import logging
 import os
 
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 def get_chunks(xda: xr.DataArray, chunks: int = 1,
                timedim: str = 'datetime') -> dict:
     """
-    Determine the chunk size for the datetime dimension. Other dimensions are assumed to be 
+    Determine the chunk size for the datetime dimension. Other dimensions are assumed to be
     small enough to not require chunking.
 
     Parameters
@@ -45,7 +46,7 @@ def fill_time_gaps_between_datasets(xds_existing: xr.DataArray, xds_new: xr.Data
     ----------
     xds_existing : xr.Dataset
         Existing dataset on disk
-    xds_new : xr.Dataset  
+    xds_new : xr.Dataset
         New dataset to append
     timedim : str
         Name of the time dimension
@@ -106,6 +107,22 @@ def _build_append_payload_full_chunks(payload: xr.DataArray, mode: str,
                                       chunklen: int, timedim: str = "datetime") -> xr.DataArray:
     """
     Construct the sequence to append so that the final total length is a multiple of `chunklen`
+
+    Parameters
+    ----------
+    payload : xr.DataArray
+        DataArray to append
+    mode : str
+        'a' for append, 'p' for prepend
+    chunklen : int
+        Chunk length in number of time steps
+    timedim : str
+        Name of the time dimension
+
+    Returns
+    -------
+    xr.DataArray
+        Padded DataArray with length a multiple of chunklen
     """
     if mode not in ['a', 'p']:
         raise ValueError(
@@ -141,7 +158,58 @@ def _build_append_payload_full_chunks(payload: xr.DataArray, mode: str,
             payload = xr.concat([pad_da, payload], dim=timedim)
         payload = payload.chunk({timedim: chunklen})
     return payload
-#
+
+
+def _update_meta_data(fout: str,
+                      last_datapoint: np.datetime64,
+                      resolution: float | None = None,
+                      meta_group: str = "meta") -> None:
+    """
+    Append current update time (and last_datapoint) to meta group.
+
+    Parameters
+    ----------
+    fout : str
+        Base zarr store path (per-variable .zarr directory).
+    last_datapoint : np.datetime64
+        Latest data time in the feature.
+    resolution : float | None
+        Optional time resolution (hours) to store once.
+    meta_group : str
+        Group name for metadata.
+    """
+
+    now = np.datetime64(datetime.now(tz=timezone.utc), 'ns')
+    new_update = xr.DataArray([now],
+                              coords={'update': [now]},
+                              dims=['update'],
+                              name='update_log')
+    new_last = xr.DataArray([last_datapoint],
+                            coords={'endtime': [now]},
+                            dims=['endtime'],
+                            name='last_datapoint')
+
+    try:
+        meta = xr.open_zarr(fout, group=meta_group, chunks=None)
+        # Existing vars -> concatenate
+        update_old = meta.get('update_log')
+        last_old = meta.get('last_datapoint')
+        res_da_old = meta.get('resolution').values[()]
+        new_update = xr.concat([update_old, new_update], dim='update')
+        new_last = xr.concat([last_old, new_last], dim='endtime')
+        if resolution != res_da_old:
+            raise ValueError(f"Resolution mismatch for {fout}: "
+                             f"{res_da_old} != {resolution}")
+        res_da = xr.DataArray(resolution, name='resolution')
+    except Exception:
+        # First creation
+        res_da = xr.DataArray(
+            resolution, name='resolution') if resolution is not None else None
+
+    vars = {'update_log': new_update, 'last_datapoint': new_last}
+    if res_da is not None:
+        vars['resolution'] = res_da
+    xr.Dataset(vars).to_zarr(fout, group=meta_group, mode='w')
 
 
 def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
@@ -182,6 +250,9 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
         fout = os.path.join(path, feature + '.zarr')
         # nchunks = get_chunks(xds[feature], chunks)
         nchunks = chunks
+        last_dp = xds[feature][timedim].values[-1]
+        _update_meta_data(fout, last_dp, resolution=float(
+            get_dt(xds[timedim]) / pd.Timedelta(1, 'h')))
         try:
             xds_existing = xr.open_zarr(fout, group=group)
             has_store = True
@@ -204,6 +275,7 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
             combined = xda_new.combine_first(xds_existing[feature]).compute()
             combined.chunk({timedim: nchunks}).to_zarr(fout, group=group, mode='w',
                                                        write_empty_chunks=True)
+
         elif xds_existing[timedim][-1] < xds[timedim][0]:
             # append
             xda_new = fill_time_gaps_between_datasets(xds_existing[feature].isel({timedim: -1}),
@@ -212,12 +284,14 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
                 xda_new, 'a', nchunks)
             xda_new.to_zarr(fout, group=group, mode='a',
                             append_dim=timedim)
+
         elif xds_existing[timedim][0] > xds[timedim][0] and xds_existing[timedim][-1] < xds[timedim][-1]:
             # existing datetimes are contained in new array
             xda_new = _build_append_payload_full_chunks(
                 xds[feature], 'a', nchunks)
             xda_new.to_zarr(fout, group=group, mode='w',
                             write_empty_chunks=True)
+
         else:
             overlap = xds_existing[timedim].where(
                 xds_existing[timedim] == xds[timedim])

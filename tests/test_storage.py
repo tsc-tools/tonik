@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -189,6 +189,7 @@ def test_attributes_only(tmp_path_factory):
     tstart = datetime(2016, 1, 1)
     xdf = generate_test_data(dim=1, intervals=20, tstart=tstart)
     g.save(xdf, mode='w', archive_starttime=tstart)
-    ret = g('rsam', attributes_only=True)
-    assert isinstance(ret, dict)
-    assert len(ret.keys()) == 8
+    ret = g('rsam', metadata=True)
+    assert ret['update_log'].values[-1] <= np.datetime64(
+        datetime.now(timezone.utc))
+    assert len(ret['update_log'].values) == 1

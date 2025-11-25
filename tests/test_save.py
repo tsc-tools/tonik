@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pytest
@@ -85,10 +85,10 @@ def test_xarray2netcdf_resolution(tmp_path_factory):
     c.save(xdf, resolution=0.1, archive_starttime=datetime(2022, 7, 18))
 
     xdf_test = c('rsam')
+    xdf_test_meta = c('rsam', metadata=True)
     assert xdf_test.loc['2022-07-18T00:12:00'] == xdf['rsam'].loc['2022-07-18T00:10:00']
     assert np.isnan(xdf_test.loc['2022-07-18T00:06:00'].data)
-    assert xdf_test.attrs['resolution'] == 0.1
-    assert xdf_test.attrs['resolution_units'] == 'h'
+    assert xdf_test_meta['resolution'][()] == 0.1
 
 
 def test_xarray2netcdf_attributes(tmp_path_factory):
@@ -105,6 +105,30 @@ def test_xarray2netcdf_attributes(tmp_path_factory):
     xdf_test = c('rsam')
     assert xdf_test.attrs['station'] == xdf.attrs['station']
     assert xdf_test.attrs['feature'] == 'rsam'
+
+
+def test_xarray2netcdf_metadata(tmp_path_factory):
+    starttime = datetime(2022, 7, 18, 0, 0, 0)
+    xdf = generate_test_data(dim=1, ndays=1, tstart=starttime,
+                             add_nans=False)
+    temp_dir = tmp_path_factory.mktemp('test_xarray2netcdf')
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=datetime(2000, 1, 1),
+                endtime=datetime.fromisoformat(xdf.attrs['endtime']),
+                backend='netcdf')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf, archive_starttime=starttime)
+    starttime = datetime(2022, 7, 19, 0, 0, 0)
+    xdf = generate_test_data(dim=1, ndays=1, tstart=starttime,
+                             add_nans=False)
+    c.save(xdf)
+    xdf_test = c('rsam', metadata=True)
+    now = np.datetime64(datetime.now(timezone.utc))
+    assert xdf_test['update_log'].values[-1] <= now
+    assert xdf_test['last_datapoint'].values[-1] == xdf.datetime.values[-1]
+    assert xdf_test['resolution'][()] == 10./60.
+    assert len(xdf_test['update_log'].values) == 2
+    assert len(xdf_test['last_datapoint'].values) == 2
 
 
 def test_xarray2netcdf_with_gaps(tmp_path_factory):
@@ -332,3 +356,24 @@ def test_xarray2zarr_high_dimensionality(setup_multi_dimensional):
     assert np.all(xds_test.loc[dict(datetime=xds.datetime)] == xds['order2'])
     assert np.all(xds_test.loc[dict(datetime=xds2.datetime)] == xds2['order2'])
     assert xds_test.sizes['datetime'] == 432
+
+
+def test_xarray2zarr_metadata(tmp_path_factory):
+    temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
+    start = datetime(2022, 7, 18, 8, 0, 0)
+    xdf1 = generate_test_data(dim=1, intervals=3, freq='1h', tstart=start)
+    xdf2 = generate_test_data(dim=1, intervals=3, freq='1h', tstart=start,
+                              seed=43)
+    g = Storage('test_experiment', rootdir=temp_dir,
+                starttime=start, endtime=start + timedelta(days=1),
+                backend='zarr')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    c.save(xdf1)
+    c.save(xdf2)
+    xdf_test = c('rsam', metadata=True)
+    assert len(xdf_test['update_log'].values) == 2
+    assert len(xdf_test['last_datapoint'].values) == 2
+    assert xdf_test['last_datapoint'].values[-1] == xdf2.datetime.values[-1]
+    assert xdf_test['update_log'].values[-1] <= np.datetime64(
+        datetime.now(timezone.utc))
+    assert xdf_test['resolution'][()] == 1.0

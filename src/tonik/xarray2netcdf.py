@@ -1,6 +1,6 @@
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from warnings import filterwarnings
 
 import h5netcdf
@@ -40,6 +40,7 @@ def xarray2netcdf(xArray, fdir, group="original", timedim="datetime",
     data_starttime = xArray[timedim].values[0].astype(
         'datetime64[us]').astype(datetime)
     starttime = min(data_starttime, archive_starttime)
+    now = datetime.now(tz=timezone.utc)
     if resolution is None:
         resolution = (np.diff(xArray[timedim])/np.timedelta64(1, 'h'))[0]
 
@@ -61,10 +62,15 @@ def xarray2netcdf(xArray, fdir, group="original", timedim="datetime",
 
         with h5netcdf.File(h5file, _mode) as h5f:
             try:
-                rootGrp = _create_h5_Structure(group, featureName,
-                                               h5f, xArray, starttime, timedim)
+                rootGrp = _create_root_group(group, featureName,
+                                             h5f, xArray, starttime, timedim)
             except ValueError:  # group already exists, append
                 rootGrp = h5f[group]
+
+            try:
+                metaGrp = _create_meta_group(h5f, resolution)
+            except ValueError:  # group already exists, append
+                metaGrp = h5f['meta']
 
             # determine indices
             new_time = date2num(xArray[timedim].values.astype('datetime64[us]').astype(datetime),
@@ -73,6 +79,7 @@ def xarray2netcdf(xArray, fdir, group="original", timedim="datetime",
             t0 = date2num(starttime,
                           units=rootGrp[timedim].attrs['units'],
                           calendar=rootGrp[timedim].attrs['calendar'])
+
             indices = np.rint((new_time - t0)/resolution).astype(int)
             if not np.all(indices >= 0):
                 raise ValueError("Data starts before the archive start time")
@@ -86,18 +93,21 @@ def xarray2netcdf(xArray, fdir, group="original", timedim="datetime",
                 data[:, indices] = xArray[featureName].values
             else:
                 data[indices] = xArray[featureName].values
-            rootGrp.attrs['endtime'] = str(num2date(times[-1], units=rootGrp[timedim].attrs['units'],
-                                                    calendar=rootGrp[timedim].attrs['calendar']))
-            rootGrp.attrs['resolution'] = resolution
-            rootGrp.attrs['resolution_units'] = 'h'
-            try:
-                _setMetaInfo(featureName, rootGrp, xArray)
-            except KeyError as e:
-                logging.warning(
-                    f"Could not set all meta info for {featureName}: {e}")
+            now_time = date2num(now, units=metaGrp['update_log'].attrs['units'],
+                                calendar=metaGrp['update_log'].attrs['calendar'])
+            ulog = metaGrp['update_log']
+            ldata = metaGrp['last_datapoint']
+            metaGrp.resize_dimension('update', ulog.shape[0] + 1)
+            ulog[-1] = now_time
+            metaGrp.resize_dimension('endtime', ldata.shape[0] + 1)
+            ldata[-1] = times[-1]
+            old_resolution = metaGrp['resolution'][()]
+            if old_resolution != resolution:
+                raise ValueError(f"Resolution mismatch for {featureName}: "
+                                 f"{old_resolution} != {resolution}")
 
 
-def _create_h5_Structure(defaultGroupName, featureName, h5f, xArray, starttime, timedim):
+def _create_root_group(defaultGroupName, featureName, h5f, xArray, starttime, timedim):
     rootGrp = h5f.create_group(defaultGroupName)
     rootGrp.dimensions[timedim] = None
     coordinates = rootGrp.create_variable(timedim, (timedim,), float)
@@ -114,10 +124,33 @@ def _create_h5_Structure(defaultGroupName, featureName, h5f, xArray, starttime, 
     # names in the correct order
     rootGrp.create_variable(featureName, tuple(
         xArray[featureName].dims), dtype=float, fillvalue=0.)
+    _set_attributes(featureName, rootGrp, xArray)
     return rootGrp
 
 
-def _setMetaInfo(featureName, rootGrp, xArray):
+def _set_attributes(featureName, rootGrp, xArray):
+    """
+    Set attributes for the root group. Attributes are assumed to not change
+    over time. If they do, they should be stored in the 'meta' group.
+    """
     for key, value in xArray.attrs.items():
         rootGrp.attrs[key] = value
     rootGrp.attrs['feature'] = featureName
+
+
+def _create_meta_group(h5f, resolution):
+    """
+    Create meta group to track processing history.
+    """
+    metaGrp = h5f.create_group('meta')
+    metaGrp.dimensions['update'] = None
+    ulog = metaGrp.create_variable('update_log', ('update',), float)
+    ulog.attrs['units'] = 'hours since 1970-01-01 00:00:00.0'
+    ulog.attrs['calendar'] = 'gregorian'
+    metaGrp.dimensions['endtime'] = None
+    ldata = metaGrp.create_variable('last_datapoint', ('endtime',), float)
+    ldata.attrs['units'] = 'hours since 1970-01-01 00:00:00.0'
+    ldata.attrs['calendar'] = 'gregorian'
+    res = metaGrp.create_variable("resolution", (), dtype=float)
+    res[()] = resolution
+    return metaGrp
