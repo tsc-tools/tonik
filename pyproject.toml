@@ -37,8 +37,8 @@ dependencies = [
     "uvicorn[standard]>=0.22",
     "fastapi>=0.112",
     "matplotlib",
-    "zarr[remote_tests]>=3.0.3; python_version >= '3.11'",
-    "zarr[remote_tests]<3; python_version < '3.11'",
+    "zarr",
+    "zarr",
     "s3fs"
 ]
 
@@ -46,9 +46,12 @@ dependencies = [
 dev = ["pytest",
        "httpx",
        "ipykernel",
+       "build",
+       "twine",
        "mkdocs",
        "mkdocstrings[python]",
-       "mkdocs-jupyter"]
+       "mkdocs-jupyter",
+       "zarr[remote_tests]"]
 
 [project.urls]
 Homepage = "https://tsc-tools.github.io/tonik"
@@ -87,3 +90,6 @@ default = { solve-group = "default" }
 dev = { features = ["dev"], solve-group = "default" }
 
 [tool.pixi.tasks]
+
+[tool.pixi.dependencies]
+python = "3.11.*"
