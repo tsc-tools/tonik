@@ -12,7 +12,7 @@ exclude = [
 
 [project]
 name = "tonik"
-version = "0.1.17"
+version = "0.1.18"
 authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
@@ -74,3 +74,16 @@ python = ["3.11", "3.9"]
 
 [tool.hatch.envs.test.scripts]
 run-pytest = "pytest tests"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-dependencies]
+tonik = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+
+[tool.pixi.tasks]
