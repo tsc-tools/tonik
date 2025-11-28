@@ -102,7 +102,7 @@ def xarray2netcdf(xArray, fdir, group="original", timedim="datetime",
             metaGrp.resize_dimension('endtime', ldata.shape[0] + 1)
             ldata[-1] = times[-1]
             old_resolution = metaGrp['resolution'][()]
-            if old_resolution != resolution:
+            if abs(old_resolution - resolution) > 1e-5:
                 raise ValueError(f"Resolution mismatch for {featureName}: "
                                  f"{old_resolution} != {resolution}")
 

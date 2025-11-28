@@ -197,7 +197,7 @@ def _update_meta_data(fout: str,
         res_da_old = meta.get('resolution').values[()]
         new_update = xr.concat([update_old, new_update], dim='update')
         new_last = xr.concat([last_old, new_last], dim='endtime')
-        if resolution != res_da_old:
+        if abs(resolution - res_da_old) > 1e-5:
             raise ValueError(f"Resolution mismatch for {fout}: "
                              f"{res_da_old} != {resolution}")
         res_da = xr.DataArray(resolution, name='resolution')
