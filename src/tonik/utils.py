@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 from datetime import datetime, timezone, timedelta
 
 import numpy as np
@@ -13,12 +13,40 @@ def generate_test_data(dim=1, ndays=30, nfreqs=10,
                        freq_names=None, add_nans=True):
     """
     Generate a 1D or 2D feature for testing.
+
+    Parameters
+    ----------
+    dim : int
+        Dimension of the data (1 or 2).
+    ndays : int
+        Number of days to generate data for.
+    nfreqs : int
+        Number of frequencies (only for dim=2).
+    tstart : datetime
+        Start time of the data.
+    freq : str
+        Frequency of the data (e.g., '10min').
+    intervals : int
+        Number of intervals to generate. If None, calculated from ndays and freq.
+    feature_names : list
+        Names of the features to generate.
+    seed : int
+        Random seed for reproducibility.
+    freq_names : list
+        Names of the frequency dimensions (only for dim=2).
+    add_nans : bool
+        Whether to add NaN values to the data.
+
+    Returns
+    -------
+    xr.Dataset
+        Generated test dataset.
     """
     assert dim < 3
     assert dim > 0
 
     if intervals is None:
-        nints = ndays * 6 * 24
+        nints = ndays * int(pd.Timedelta('1h')/pd.Timedelta(freq)) * 24
     else:
         nints = intervals
     dates = pd.date_range(tstart, freq=freq, periods=nints)
@@ -57,6 +85,116 @@ def generate_test_data(dim=1, ndays=30, nfreqs=10,
     xds.attrs['station'] = 'MDR'
     xds.attrs['interval'] = '10min'
     return xds
+
+
+def round_datetime(dt: datetime, interval: Union[int, float, timedelta]) -> datetime:
+    """
+    Find closest multiple of interval to given time.
+
+    Parameters:
+    -----------
+    dt : datetime
+        The datetime to round.
+    interval : Union[int, float, timedelta]
+        The interval to which to round the datetime.
+
+    Returns:
+    --------
+    datetime
+        The rounded datetime.
+    """
+    # Normalize interval to whole seconds (supports float/timedelta inputs)
+    if isinstance(interval, timedelta):
+        interval_sec = int(interval.total_seconds())
+    else:
+        interval_sec = int(interval)
+
+    if interval_sec <= 0:
+        raise ValueError("interval must be positive (seconds)")
+
+    # Accept ObsPy UTCDateTime transparently (preserve type on return)
+    _is_obspy = False
+    try:
+        from obspy import UTCDateTime as _UTCDateTime  # type: ignore
+        if isinstance(dt, _UTCDateTime):
+            _is_obspy = True
+            dt_py = dt.datetime  # Python datetime in UTC
+        else:
+            dt_py = dt
+    except Exception:
+        dt_py = dt
+
+    epoch = (
+        datetime(1970, 1, 1)
+        if dt_py.tzinfo is None
+        else datetime(1970, 1, 1, tzinfo=dt_py.tzinfo)
+    )
+
+    # Compute integer seconds since epoch to avoid float precision issues
+    seconds = int((dt_py - epoch).total_seconds())
+    floored = (seconds + 0.5 * interval_sec) % interval_sec
+    rounded = epoch + timedelta(seconds=seconds + 0.5 * interval_sec - floored)
+
+    if _is_obspy:
+        from obspy import UTCDateTime as _UTCDateTime  # type: ignore
+        return _UTCDateTime(rounded)
+
+    return rounded
+
+
+def floor_datetime(dt: datetime, interval: Union[int, float, timedelta]) -> datetime:
+    """
+    Floor a datetime to the latest multiple of a given interval.
+
+    Assumes ``dt`` represents a UTC time (naive or tz-aware is fine) and
+    aligns against the Unix epoch 1970-01-01T00:00:00Z. The interval is in
+    seconds (int/float) or a timedelta. Returns a datetime with the same
+    "naive vs aware" form as ``dt``.
+
+    Examples
+    --------
+    >>> from datetime import datetime
+    >>> floor_datetime(datetime.fromisoformat('2025-11-27T10:12:43'), 600)
+    datetime.datetime(2025, 11, 27, 10, 10)
+    """
+
+    # Normalize interval to whole seconds (supports float/timedelta inputs)
+    if isinstance(interval, timedelta):
+        interval_sec = int(interval.total_seconds())
+    else:
+        interval_sec = int(interval)
+
+    if interval_sec <= 0:
+        raise ValueError("interval must be positive (seconds)")
+
+    # Accept ObsPy UTCDateTime transparently (preserve type on return)
+    _is_obspy = False
+    try:
+        from obspy import UTCDateTime as _UTCDateTime  # type: ignore
+        if isinstance(dt, _UTCDateTime):
+            _is_obspy = True
+            dt_py = dt.datetime  # Python datetime in UTC
+        else:
+            dt_py = dt
+    except Exception:
+        dt_py = dt
+
+    epoch = (
+        datetime(1970, 1, 1)
+        if dt_py.tzinfo is None
+        else datetime(1970, 1, 1, tzinfo=dt_py.tzinfo)
+    )
+
+    # Compute integer seconds since epoch to avoid float precision issues
+    seconds = int((dt_py - epoch).total_seconds())
+    floored = seconds - (seconds % interval_sec)
+    rounded = epoch + timedelta(seconds=floored)
+
+    if _is_obspy:
+        from obspy import UTCDateTime as _UTCDateTime  # type: ignore
+        return _UTCDateTime(rounded)
+
+    return rounded
 
 
 def get_dt(times):
