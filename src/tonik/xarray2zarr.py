@@ -267,7 +267,7 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
             continue
 
         if xds_existing[timedim][0] > xds[timedim][-1]:
-            # prepend
+            logger.debug("Prepending data to existing zarr store.")
             xda_new = fill_time_gaps_between_datasets(xds_existing[feature].isel({timedim: 0}),
                                                       xds[feature], mode='p')
             xda_new = _build_append_payload_full_chunks(
@@ -277,7 +277,7 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
                                                        write_empty_chunks=True)
 
         elif xds_existing[timedim][-1] < xds[timedim][0]:
-            # append
+            logger.debug("Appending data to existing zarr store.")
             xda_new = fill_time_gaps_between_datasets(xds_existing[feature].isel({timedim: -1}),
                                                       xds[feature], mode='a')
             xda_new = _build_append_payload_full_chunks(
@@ -286,13 +286,19 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
                             append_dim=timedim)
 
         elif xds_existing[timedim][0] > xds[timedim][0] and xds_existing[timedim][-1] < xds[timedim][-1]:
-            # existing datetimes are contained in new array
+            logger.debug(
+                "Data in zarr store contained in new data. Rewriting zarr store.")
             xda_new = _build_append_payload_full_chunks(
                 xds[feature], 'a', nchunks)
             xda_new.to_zarr(fout, group=group, mode='w',
                             write_empty_chunks=True)
 
         else:
+            logger.debug("Data in zarr store overlaps with new data.")
+            logger.debug(
+                f"Endtime of existing data: {xds_existing[timedim][-1].values}")
+            logger.debug(f"Starttime of new data: {xds[timedim][0].values}")
+            xds_existing = xds_existing.drop_duplicates(timedim, keep='last')
             overlap = xds_existing[timedim].where(
                 xds_existing[timedim] == xds[timedim])
             xds[feature].loc[{timedim: overlap}].to_zarr(

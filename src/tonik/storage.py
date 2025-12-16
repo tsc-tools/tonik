@@ -18,7 +18,7 @@ LOGGING_CONFIG = {
             "datefmt": "%Y-%m-%d %H:%M:%S",  # How to display dates
         },
         "json": {  # The formatter name
-            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",  # The class to instantiate!
+            "()": "pythonjsonlogger.json.JsonFormatter",  # The class to instantiate!
             # Json is more complex, but easier to read, display all attributes!
             "format": """
                     asctime: %(asctime)s

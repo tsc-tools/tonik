@@ -169,6 +169,24 @@ def test_xarray2netcdf_multi_access(tmp_path_factory):
                                 group='original', engine='h5netcdf')
     xarray2netcdf(xdf2, temp_dir)
 
+@pytest.mark.slow
+def test_netcdf_attribute_bug(tmp_path_factory):
+    """
+    Test to replicate behaviour when attribute is updated more than
+    2^16 times.
+    """
+    temp_dir = tmp_path_factory.mktemp('test_netcdf_attribute_bug')
+    g = Storage('test_experiment', rootdir=temp_dir, backend='netcdf')
+    c = g.get_substore('MDR', '00', 'HHZ')
+    tstart = datetime(2022, 7, 18, 8, 0, 0)
+    for i in range(70000):
+        if i % 1000 == 0:
+            print(f'Iteration {i}')
+        xdf = generate_test_data(tstart=tstart, dim=1, intervals=3, freq='1h')
+        xdf.attrs['last_update'] = str(tstart + timedelta(hours=3))
+        tstart += timedelta(days=1)
+        c.save(xdf)
+
 
 def test_xarray2zarr(tmp_path_factory):
     xdf = generate_test_data(

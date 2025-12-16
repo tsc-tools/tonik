@@ -12,7 +12,7 @@ exclude = [
 
 [project]
 name = "tonik"
-version = "0.1.20"
+version = "0.1.21"
 authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
@@ -64,6 +64,7 @@ grafana_annotations = "tonik.grafana_annotations:main"
 
 [tool.pytest.ini_options]
 log_cli = true
+addopts = "-s"
 
 [tool.hatch.envs.test]
 dependencies = [
