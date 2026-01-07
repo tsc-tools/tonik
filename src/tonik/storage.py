@@ -2,76 +2,21 @@ import json
 import logging
 import logging.config
 import os
+import threading
+from typing import Optional
 
 import xarray as xr
 
+from .ingest import IngestWorker, enqueue_dataset
 from .xarray2netcdf import xarray2netcdf
 from .xarray2zarr import xarray2zarr
 
-LOGGING_CONFIG = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "default": {  # The formatter name, it can be anything that I wish
-            # What to add in the message
-            "format": "%(asctime)s:%(name)s:%(process)d:%(lineno)d " "%(levelname)s %(message)s",
-            "datefmt": "%Y-%m-%d %H:%M:%S",  # How to display dates
-        },
-        "json": {  # The formatter name
-            "()": "pythonjsonlogger.json.JsonFormatter",  # The class to instantiate!
-            # Json is more complex, but easier to read, display all attributes!
-            "format": """
-                    asctime: %(asctime)s
-                    created: %(created)f
-                    filename: %(filename)s
-                    funcName: %(funcName)s
-                    levelname: %(levelname)s
-                    levelno: %(levelno)s
-                    lineno: %(lineno)d
-                    message: %(message)s
-                    module: %(module)s
-                    msec: %(msecs)d
-                    name: %(name)s
-                    pathname: %(pathname)s
-                    process: %(process)d
-                    processName: %(processName)s
-                    relativeCreated: %(relativeCreated)d
-                    thread: %(thread)d
-                    threadName: %(threadName)s
-                    exc_info: %(exc_info)s
-                """,
-            "datefmt": "%Y-%m-%d %H:%M:%S",  # How to display dates
-        },
-    },
-    "handlers": {
-        "simple": {  # The handler name
-            "formatter": "default",  # Refer to the formatter defined above
-            "class": "logging.StreamHandler",  # OUTPUT: Same as above, stream to console
-            "stream": "ext://sys.stdout",
-        },
-    },
-    "loggers": {
-        "storage": {  # The name of the logger, this SHOULD match your module!
-            "level": "DEBUG",  # FILTER: only INFO logs onwards from "tryceratops" logger
-            "handlers": [
-                "simple",  # Refer the handler defined above
-            ],
-        },
-    },
-    "root": {
-        "level": "INFO",  # FILTER: only INFO logs onwards
-        "handlers": [
-            "simple",  # Refer the handler defined above
-        ]
-    },
-}
 
-logging.config.dictConfig(LOGGING_CONFIG)
-logger = logging.getLogger("__name__")
+logger = logging.getLogger(__name__)
 
 
 class Path(object):
-    def __init__(self, name, parentdir, create=True, backend='zarr'):
+    def __init__(self, name, parentdir, create=True, backend='zarr', ingest_config=None):
         self.name = name
         self.create = create
         self.backend = backend
@@ -86,6 +31,7 @@ class Path(object):
             if not os.path.exists(self.path):
                 raise FileNotFoundError(f"Path {self.path} not found")
         self.children = {}
+        self.ingest_config = ingest_config.copy() if ingest_config else None
 
     def __str__(self):
         return self.path
@@ -97,7 +43,7 @@ class Path(object):
             return self.children[key]
         except KeyError:
             self.children[key] = Path(
-                key, self.path, self.create, self.backend)
+                key, self.path, self.create, self.backend, ingest_config=self.ingest_config)
             return self.children[key]
 
     def feature_path(self, feature):
@@ -149,6 +95,18 @@ class Path(object):
         """
         Save a feature to disk
         """
+        if self.ingest_config and self.ingest_config.get('queue_path'):
+            enqueue_dataset(
+                data,
+                target_path=self.path,
+                backend=self.backend,
+                ingest_config=self.ingest_config,
+                save_kwargs=kwargs,
+            )
+            logger.debug("Queued data for %s backend at %s",
+                         self.backend, self.path)
+            return
+
         if self.backend == 'netcdf':
             xarray2netcdf(data, self.path, **kwargs)
         elif self.backend == 'zarr':
@@ -208,11 +166,15 @@ class Storage(Path):
     >>> rsam = c("rsam")
     """
 
-    def __init__(self, name, rootdir, starttime=None, endtime=None, create=True, backend='netcdf'):
+    def __init__(self, name, rootdir, starttime=None, endtime=None, create=True, backend='netcdf',
+                 ingest_config=None):
         self.stores = set()
         self.starttime = starttime
         self.endtime = endtime
-        super().__init__(name, rootdir, create, backend)
+        self._ingest_worker: Optional[IngestWorker] = None
+        self._ingest_thread: Optional[threading.Thread] = None
+        self._ingest_stop_event: Optional[threading.Event] = None
+        super().__init__(name, rootdir, create, backend, ingest_config=ingest_config)
 
     def print_tree(self, site, indent=0, output=''):
         output += ' ' * indent + site.path + '\n'
@@ -317,3 +279,51 @@ class Storage(Path):
 
     starttime = property(get_starttime, set_starttime)
     endtime = property(get_endtime, set_endtime)
+
+    def _ensure_ingest_worker(self, poll_interval=None) -> IngestWorker:
+        if not (self.ingest_config and self.ingest_config.get('queue_path')):
+            raise RuntimeError(
+                "Ingestion queue is not configured for this Storage instance.")
+
+        if self._ingest_worker is None:
+            queue_path = self.ingest_config['queue_path']
+            poll = poll_interval or self.ingest_config.get(
+                'poll_interval', 10.0)
+            self._ingest_worker = IngestWorker(
+                queue_path=queue_path,
+                poll_interval=poll,
+                target_prefix=self.path,
+            )
+        elif poll_interval:
+            self._ingest_worker.poll_interval = poll_interval
+        return self._ingest_worker
+
+    def run_ingest_once(self, poll_interval=None) -> int:
+        worker = self._ensure_ingest_worker(poll_interval)
+        return worker.run_once()
+
+    def start_ingest_worker(self, *, background=True, poll_interval=None):
+        worker = self._ensure_ingest_worker(poll_interval)
+        if not background:
+            return worker.run_once()
+        if self._ingest_thread and self._ingest_thread.is_alive():
+            return self._ingest_thread
+        stop_event = threading.Event()
+        thread = threading.Thread(
+            target=worker.run_forever,
+            kwargs={'stop_event': stop_event},
+            daemon=True,
+            name=f"tonik-ingest-{self.name}",
+        )
+        thread.start()
+        self._ingest_thread = thread
+        self._ingest_stop_event = stop_event
+        return thread
+
+    def stop_ingest_worker(self, timeout=None):
+        if self._ingest_thread and self._ingest_thread.is_alive():
+            if self._ingest_stop_event:
+                self._ingest_stop_event.set()
+            self._ingest_thread.join(timeout=timeout)
+        self._ingest_thread = None
+        self._ingest_stop_event = None

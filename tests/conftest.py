@@ -117,18 +117,18 @@ def setup_api_zarr(tmp_path_factory):
 def setup_multi_dimensional(tmp_path_factory):
     tempdir = tmp_path_factory.mktemp('test_xarray2zarr_high_dimensionality')
     test_data = xr.DataArray(
-        np.random.rand(143, 3, 24, 6),
-        dims=['datetime', 'channel', 'order_1', 'order_2'],
+        np.random.rand(3, 24, 6, 144),
+        dims=['channel', 'order_1', 'order_2', 'datetime'],
         coords={
-            'datetime': pd.date_range(start='2022-07-18', periods=143, freq='10min'),
+            'datetime': pd.date_range(start='2022-07-18', periods=144, freq='10min'),
             'channel': np.arange(3),
             'order_1': np.arange(24),
             'order_2': np.arange(6)
         },
     )
     test_data_2 = xr.DataArray(
-        np.random.rand(10, 3, 24, 6),
-        dims=['datetime', 'channel', 'order_1', 'order_2'],
+        np.random.rand(3, 24, 6, 10),
+        dims=['channel', 'order_1', 'order_2', 'datetime'],
         coords={
             'datetime': pd.date_range(start='2022-07-20', periods=10, freq='10min'),
             'channel': np.arange(3),
@@ -136,4 +136,6 @@ def setup_multi_dimensional(tmp_path_factory):
             'order_2': np.arange(6)
         },
     )
-    return tempdir, test_data, test_data_2
+    xds = xr.Dataset({'order2': test_data})
+    xds2 = xr.Dataset({'order2': test_data_2})
+    return tempdir, xds, xds2

@@ -16,29 +16,75 @@ from .utils import merge_arrays, fill_time_gaps, get_dt
 logger = logging.getLogger(__name__)
 
 
-def get_chunks(xda: xr.DataArray, chunks: int = 1,
-               timedim: str = 'datetime') -> dict:
+def _init_timeseries_store(path: str, start: np.datetime64, stop: np.datetime64, interval: pd.Timedelta,
+                           data_vars: dict, group: str = "original", chunk_size: int = 10,
+                           timedim: str = "datetime") -> xr.DataArray:
     """
-    Determine the chunk size for the datetime dimension. Other dimensions are assumed to be
-    small enough to not require chunking.
+    Initialize an empty zarr store for time series data. This facilitates writing data out
+    of sequence and avoid prepending which is costly and difficult to get right.
 
     Parameters
     ----------
-    coords : xr.core.coordinates.DatasetCoordinates
-        Coordinates of the dataset.
-    chunks : int, optional
-        Number of chunks in days to divide the datetime dimension into, by default 1.
+    path : str
+        Path to the zarr store.
+    start : np.datetime64
+        Start time of the zarr store.
+    stop : np.datetime64
+        End time of the zarr store.
+    interval : pd.Timedelta
+        Sampling interval string (e.g. '1H', '15T') for the time dimension
+    data_vars : dict
+        Dictionary defining the data variables to create. Keys are variable names,
+        values are tuples of (dims, shape, dtype) where dims is a tuple of dimension
+        names (excluding the time dimension), shape is a tuple of dimension sizes
+        (excluding the time dimension), and dtype is the numpy data type.
+    group : str, optional
+        Group name in the zarr store, by default "original"
+    chunk_size : int, optional
+        Chunk size in number of time steps, by default 10
+    timedim : str, optional
+        Name of the time dimension, by default "datetime"
+
     """
-    if timedim not in xda.coords:
-        raise ValueError(
-            f"Datetime coordinate {timedim} not found in dataset coordinates.")
-    dt = get_dt(xda.coords[timedim])
-    chunklength = int(pd.Timedelta('%dD' % chunks) / dt)
-    return chunklength
+    # Make the zarr store a multiple of chunk_size
+    stop_ts = pd.Timestamp(stop)
+    start_ts = pd.Timestamp(start)
+    chunk_length = int(chunk_size)
+    if chunk_length <= 0:
+        raise ValueError("chunk_size must be a positive integer")
+    total_steps = int((stop_ts - start_ts) // interval) + 1
+    if total_steps < 1:
+        total_steps = chunk_length
+    if total_steps % chunk_length:
+        required_steps = ((total_steps + chunk_length - 1) //
+                          chunk_length) * chunk_length
+        start_ts = stop_ts - interval * (required_steps - 1)
+    time_index = pd.date_range(start=start_ts, end=stop_ts, freq=interval)
+    ds = xr.Dataset()
+    name, value = list(data_vars.items())[0]
+    dims, coords, shape, dtype = value
+    dims = dims + (timedim,)
+    shape = tuple(shape) + (len(time_index),)
+    # Create coordinates for gap dataset
+    new_coords = {timedim: time_index}
+    for coord_name, coord in coords.items():
+        if coord_name != timedim:
+            new_coords[coord_name] = coord
+
+    xda = xr.DataArray(
+        np.full(shape, np.nan, dtype=dtype),
+        coords=new_coords,
+        dims=dims,
+        name=name
+    )
+    xda = xda.chunk(
+        {timedim: chunk_size, **{d: -1 for d in dims[:-1]}})
+    xda.to_zarr(path, group=group, mode="w")
+    return xda
 
 
-def fill_time_gaps_between_datasets(xds_existing: xr.DataArray, xds_new: xr.DataArray, mode: str,
-                                    timedim: str = 'datetime') -> xr.DataArray:
+def _fill_time_gaps_between_datasets(xds_existing: xr.DataArray, xds_new: xr.DataArray, interval: pd.Timedelta,
+                                     timedim: str = 'datetime', chunk_size: int = 10) -> xr.DataArray:
     """
     Fill gaps between existing and new datasets.
 
@@ -56,29 +102,23 @@ def fill_time_gaps_between_datasets(xds_existing: xr.DataArray, xds_new: xr.Data
     xr.Dataset
         Combined dataset with gaps filled
     """
-    if mode not in ['a', 'p']:
-        raise ValueError(
-            'Mode has to be either "a" for append or "p" for prepend')
-
-    # get the sample interval
-    dt = get_dt(xds_new.coords[timedim])
 
     existing_endpoint = xds_existing[timedim].values
     # Get time ranges
-    if mode == 'a':
-        gap_start = existing_endpoint + dt
-        gap_end = xds_new[timedim].values[0] - dt
-    elif mode == 'p':
-        gap_end = existing_endpoint - dt
-        gap_start = xds_new[timedim].values[-1] + dt
+    gap_start = existing_endpoint + interval
+    gap_end = xds_new[timedim].values[0] - interval
+
+    # Prepare shape for gap filling
+    shape_list = list(xds_new.shape)
+    dims_list = list(xds_new.dims)
+    shape_list.pop(dims_list.index(timedim))
 
     if gap_start <= gap_end:
-        gap_times = pd.date_range(start=gap_start, end=gap_end, freq=dt)
+        gap_times = pd.date_range(start=gap_start, end=gap_end, freq=interval)
 
         # Create NaN array with same shape as variable but for gap times
-        gap_shape = (len(gap_times),) + \
-            xds_new.shape[1:]  # Skip time dimension
-        gap_values = np.full(gap_shape, np.nan)
+        gap_shape = tuple(shape_list) + (len(gap_times),)
+        gap_values = np.full(gap_shape, np.nan, dtype=xds_new.dtype)
 
         # Create coordinates for gap dataset
         gap_coords = {timedim: gap_times}
@@ -94,70 +134,28 @@ def fill_time_gaps_between_datasets(xds_existing: xr.DataArray, xds_new: xr.Data
         )
 
         # Combine: existing + gap + new
-        if mode == 'a':
-            combined = xr.concat([gap_data, xds_new], dim=timedim)
-        elif mode == 'p':
-            combined = xr.concat([xds_new, gap_data], dim=timedim)
-        return combined
+        combined = xr.concat([gap_data, xds_new], dim=timedim)
     else:
-        return xds_new
+        combined = xds_new
 
-
-def _build_append_payload_full_chunks(payload: xr.DataArray, mode: str,
-                                      chunklen: int, timedim: str = "datetime") -> xr.DataArray:
-    """
-    Construct the sequence to append so that the final total length is a multiple of `chunklen`
-
-    Parameters
-    ----------
-    payload : xr.DataArray
-        DataArray to append
-    mode : str
-        'a' for append, 'p' for prepend
-    chunklen : int
-        Chunk length in number of time steps
-    timedim : str
-        Name of the time dimension
-
-    Returns
-    -------
-    xr.DataArray
-        Padded DataArray with length a multiple of chunklen
-    """
-    if mode not in ['a', 'p']:
-        raise ValueError(
-            'Mode has to be either "a" for append or "p" for prepend')
-
-    # pad the tail so that payload_len % chunklen == 0
-    pay_len = payload.sizes[timedim]
-    need = -pay_len % chunklen  # 0..chunklen-1
-
+    # ensure new array aligns with chunk size
+    arr_len = combined.sizes[timedim]
+    need = -arr_len % chunk_size  # 0..chunklen-1
     if need > 0:
-        dt = get_dt(payload.coords[timedim])
-        if mode == 'a':
-            start = payload[timedim].values[-1] + dt
-        elif mode == 'p':
-            start = payload[timedim].values[0] - (need+1)*dt
-        pad_times = pd.date_range(start=start, periods=need, freq=dt)
-        pad_shape = []
-        for i, d in enumerate(payload.dims):
-            if d == timedim:
-                pad_shape.append(need)
-            else:
-                pad_shape.append(payload.shape[i])
-        pad_vals = np.full(pad_shape, np.nan)
+        start = combined[timedim].values[-1] + interval
+        pad_times = pd.date_range(start=start, periods=need, freq=interval)
+        pad_shape = tuple(shape_list) + (len(pad_times),)
+        pad_vals = np.full(pad_shape, np.nan, dtype=xds_new.dtype)
         pad_coords = {timedim: pad_times}
-        for c in payload.coords:
-            if c != timedim:
-                pad_coords[c] = payload.coords[c]
+        for coord_name, coord in xds_new.coords.items():
+            if coord_name != timedim:
+                pad_coords[coord_name] = coord
         pad_da = xr.DataArray(pad_vals, coords=pad_coords,
-                              dims=payload.dims, name=payload.name, attrs=payload.attrs)
-        if mode == 'a':
-            payload = xr.concat([payload, pad_da], dim=timedim)
-        elif mode == 'p':
-            payload = xr.concat([pad_da, payload], dim=timedim)
-        payload = payload.chunk({timedim: chunklen})
-    return payload
+                              dims=xds_new.dims,
+                              name=xds_new.name)
+        combined = xr.concat([combined, pad_da], dim=timedim)
+
+    return combined
 
 
 def _update_meta_data(fout: str,
@@ -213,7 +211,8 @@ def _update_meta_data(fout: str,
 
 
 def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
-                chunks: int = 10, timedim: str = 'datetime') -> None:
+                chunk_size: int = 10, timedim: str = 'datetime', interval: str = None,
+                archive_starttime: datetime = datetime(2000, 1, 1)) -> None:
     """
     Write xarray dataset to zarr files.
 
@@ -245,14 +244,16 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
     # Fill gaps
     xds = xds.drop_duplicates(timedim, keep='last')
     xds = fill_time_gaps(xds, timedim=timedim)
+    if interval is None:
+        interval = get_dt(xds[timedim])
+    else:
+        interval = pd.to_timedelta(interval)
 
     for feature in xds.data_vars.keys():
         fout = os.path.join(path, feature + '.zarr')
-        # nchunks = get_chunks(xds[feature], chunks)
-        nchunks = chunks
         last_dp = xds[feature][timedim].values[-1]
         _update_meta_data(fout, last_dp, resolution=float(
-            get_dt(xds[timedim]) / pd.Timedelta(1, 'h')))
+            interval / pd.Timedelta(1, 'h')))
         try:
             xds_existing = xr.open_zarr(fout, group=group)
             has_store = True
@@ -260,57 +261,61 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
             has_store = False
 
         if not has_store:
-            xda_new = _build_append_payload_full_chunks(
-                xds[feature], 'a', nchunks)
-            xda_new.to_zarr(fout, group=group, mode='w',
-                            write_empty_chunks=True)
-            continue
+            logger.debug("Creating new zarr store.")
+            shape_list = list(xds[feature].shape)
+            dims_list = list(xds[feature].dims)
+            shape_list.pop(dims_list.index(timedim))
+            dims_list.pop(dims_list.index(timedim))
+            xds_existing = _init_timeseries_store(
+                fout,
+                start=np.datetime64(archive_starttime),
+                stop=xds[feature][timedim].values[-1],
+                interval=interval,
+                data_vars={
+                    feature: (tuple(dims_list), xds[feature].coords,
+                              tuple(shape_list), xds[feature].dtype)},
+                group=group,
+                chunk_size=chunk_size,
+                timedim=timedim
+            )
 
-        if xds_existing[timedim][0] > xds[timedim][-1]:
-            logger.debug("Prepending data to existing zarr store.")
-            xda_new = fill_time_gaps_between_datasets(xds_existing[feature].isel({timedim: 0}),
-                                                      xds[feature], mode='p')
-            xda_new = _build_append_payload_full_chunks(
-                xda_new, 'p', nchunks)
-            combined = xda_new.combine_first(xds_existing[feature]).compute()
-            combined.chunk({timedim: nchunks}).to_zarr(fout, group=group, mode='w',
-                                                       write_empty_chunks=True)
+        if xds_existing[timedim][0] > xds[timedim][0]:
+            raise ValueError("New data ends before existing data starts. "
+                             "Prepending to existing data is currently not supported.")
 
-        elif xds_existing[timedim][-1] < xds[timedim][0]:
+        elif xds_existing[timedim][-1] <= xds[timedim][0]:
             logger.debug("Appending data to existing zarr store.")
-            xda_new = fill_time_gaps_between_datasets(xds_existing[feature].isel({timedim: -1}),
-                                                      xds[feature], mode='a')
-            xda_new = _build_append_payload_full_chunks(
-                xda_new, 'a', nchunks)
+            xda_new = _fill_time_gaps_between_datasets(xds_existing[feature].isel({timedim: -1}),
+                                                       xds[feature], interval, chunk_size=chunk_size)
             xda_new.to_zarr(fout, group=group, mode='a',
                             append_dim=timedim)
-
-        elif xds_existing[timedim][0] > xds[timedim][0] and xds_existing[timedim][-1] < xds[timedim][-1]:
-            logger.debug(
-                "Data in zarr store contained in new data. Rewriting zarr store.")
-            xda_new = _build_append_payload_full_chunks(
-                xds[feature], 'a', nchunks)
-            xda_new.to_zarr(fout, group=group, mode='w',
-                            write_empty_chunks=True)
-
         else:
             logger.debug("Data in zarr store overlaps with new data.")
             logger.debug(
                 f"Endtime of existing data: {xds_existing[timedim][-1].values}")
             logger.debug(f"Starttime of new data: {xds[timedim][0].values}")
-            xds_existing = xds_existing.drop_duplicates(timedim, keep='last')
-            overlap = xds_existing[timedim].where(
-                xds_existing[timedim] == xds[timedim])
-            xds[feature].loc[{timedim: overlap}].to_zarr(
-                fout, group=group, mode='r+', region='auto')
-            remainder = xds[feature].drop_sel({timedim: overlap})
+            existing_times = xds_existing[timedim].values
+            new_times = xds[timedim].values
+
+            overlap_times, idx_existing, idx_new = np.intersect1d(
+                existing_times,
+                new_times,
+                assume_unique=True,
+                return_indices=True,
+            )
+            region = {}
+            for dim in xds[feature].dims:
+                if dim == timedim:
+                    start = int(idx_existing.min())
+                    stop = start + len(idx_existing)
+                    region[dim] = slice(start, stop)
+                else:
+                    region[dim] = 'auto'
+            xds[feature].isel({timedim: idx_new}).to_zarr(
+                fout, group=group, mode='r+', region=region)
+            remainder = xds[feature].drop_sel({timedim: new_times[idx_new]})
             if remainder.sizes[timedim] > 0:
-                mode = 'a'
-                if remainder[timedim][-1] < xds_existing[timedim][0]:
-                    mode = 'p'
-                xda_new = fill_time_gaps_between_datasets(xds_existing[feature].isel({timedim: 0}),
-                                                          xds[feature], mode=mode)
-                xda_new = _build_append_payload_full_chunks(
-                    xda_new, mode, nchunks)
+                xda_new = _fill_time_gaps_between_datasets(xds_existing[feature].isel({timedim: -1}),
+                                                           remainder, interval, chunk_size=chunk_size)
                 xda_new.to_zarr(fout, group=group, mode='a',
                                 append_dim=timedim)
