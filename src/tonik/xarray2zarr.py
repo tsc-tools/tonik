@@ -177,7 +177,7 @@ def _update_meta_data(fout: str,
         Group name for metadata.
     """
 
-    now = np.datetime64(datetime.now(tz=timezone.utc), 'ns')
+    now = np.datetime64(datetime.now(tz=timezone.utc), 's')
     new_update = xr.DataArray([now],
                               coords={'update': [now]},
                               dims=['update'],
@@ -210,7 +210,7 @@ def _update_meta_data(fout: str,
     xr.Dataset(vars).to_zarr(fout, group=meta_group, mode='w')
 
 
-def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
+def xarray2zarr(xds: xr.Dataset, path: str, group='original',
                 chunk_size: int = 10, timedim: str = 'datetime', interval: str = None,
                 archive_starttime: datetime = datetime(2000, 1, 1)) -> None:
     """
@@ -283,7 +283,7 @@ def xarray2zarr(xds: xr.Dataset, path: str, mode: str = 'a', group='original',
             raise ValueError("New data ends before existing data starts. "
                              "Prepending to existing data is currently not supported.")
 
-        elif xds_existing[timedim][-1] <= xds[timedim][0]:
+        elif xds_existing[timedim][-1] < xds[timedim][0]:
             logger.debug("Appending data to existing zarr store.")
             xda_new = _fill_time_gaps_between_datasets(xds_existing[feature].isel({timedim: -1}),
                                                        xds[feature], interval, chunk_size=chunk_size)

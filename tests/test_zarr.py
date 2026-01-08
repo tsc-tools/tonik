@@ -176,7 +176,7 @@ def test_xarray2zarr_with_overlaps_1D(tmp_path_factory):
     """
     temp_dir = tmp_path_factory.mktemp('test_xarray2zarr')
     start = datetime(2022, 7, 18, 8, 0, 0)
-    end = datetime(2022, 7, 18, 9, 0, 0)
+    end = datetime(2022, 7, 18, 10, 0, 0)
     archive_starttime = datetime(2022, 7, 18, 0, 0, 0)
     xdf1 = generate_test_data(dim=1, intervals=3, freq='1h', tstart=start)
     xdf2 = generate_test_data(dim=1, intervals=3, freq='1h', tstart=end)
@@ -187,10 +187,10 @@ def test_xarray2zarr_with_overlaps_1D(tmp_path_factory):
     c.save(xdf1, archive_starttime=archive_starttime)
     c.save(xdf2)
     xdf_test = c('rsam')
-    assert (~xdf_test.isnull()).sum() == 4
+    assert (~xdf_test.isnull()).sum() == 5
     assert xdf_test.isel(datetime=0).values == xdf1.rsam.isel(
         datetime=0).values
-    assert xdf_test.isel(datetime=1).values == xdf2.rsam.isel(
+    assert xdf_test.isel(datetime=2).values == xdf2.rsam.isel(
         datetime=0).values
 
 

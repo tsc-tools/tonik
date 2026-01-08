@@ -1,10 +1,12 @@
-import json
+import threading
+import time
 import os
 from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
 import pytest
+import xarray as xr
 
 from tonik import Storage, generate_test_data, get_labels
 from tonik.ingest import IngestWorker
@@ -250,3 +252,31 @@ def test_ingest_worker_run_forever_stops(tmp_path):
 
     assert not thread.is_alive()
     assert call_count["value"] >= 1
+
+
+def test_ingest_worker_with_data(tmp_path_factory):
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    logger = logging.getLogger('tonik.ingest')
+    rootdir = tmp_path_factory.mktemp('data')
+    queue_dir = tmp_path_factory.mktemp('ingest_queue')
+    storage = Storage('test', rootdir=rootdir, backend='zarr',
+                      ingest_config={'queue_path': str(queue_dir)},
+                      starttime=datetime(2022, 7, 1, 0, 0, 0),
+                      endtime=datetime(2022, 7, 31, 0, 0, 0))
+    storage.start_ingest_worker(poll_interval=0.5)
+    substore = storage.get_substore('MDR', '00', 'HHZ')
+    archive_starttime = datetime(2022, 7, 1, 0, 0, 0)
+    data1 = generate_test_data(dim=1, intervals=3, freq='1h',
+                               tstart=datetime(2022, 7, 18, 0, 0, 0),
+                               add_nans=False)
+    substore.save(data1, archive_starttime=archive_starttime)
+    time.sleep(1)
+    data2 = generate_test_data(dim=1, intervals=3, freq='1h',
+                               tstart=datetime(2022, 7, 18, 2, 0, 0),
+                               add_nans=False)
+    substore.save(data2, archive_starttime=archive_starttime)
+    time.sleep(5)
+    xdf_test = substore('rsam')
+    np.testing.assert_array_equal(xdf_test.loc[{'datetime': data2.datetime}].values,
+                                  data2['rsam'].values)

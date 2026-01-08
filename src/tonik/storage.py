@@ -291,8 +291,7 @@ class Storage(Path):
                 'poll_interval', 10.0)
             self._ingest_worker = IngestWorker(
                 queue_path=queue_path,
-                poll_interval=poll,
-                target_prefix=self.path,
+                poll_interval=poll
             )
         elif poll_interval:
             self._ingest_worker.poll_interval = poll_interval
