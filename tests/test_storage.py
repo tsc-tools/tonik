@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 from tonik import Storage, generate_test_data, get_labels
+from tonik.ingest import IngestWorker
 
 
 def test_group(tmp_path_factory):
@@ -193,3 +194,59 @@ def test_attributes_only(tmp_path_factory):
     assert ret['update_log'].values[-1] <= np.datetime64(
         datetime.now(timezone.utc))
     assert len(ret['update_log'].values) == 1
+
+
+def test_storage_ingest_worker_queue(tmp_path_factory):
+    base = tmp_path_factory.mktemp('ingest_queue')
+    queue_dir = base / 'queue'
+    archive_dir = base / 'archive'
+
+    storage = Storage('test', rootdir=archive_dir, backend='zarr',
+                      ingest_config={'queue_path': str(queue_dir)})
+    substore = storage.get_substore('MDR', '00', 'HHZ')
+
+    data = generate_test_data(dim=1, intervals=3, freq='1h',
+                              tstart=datetime(2022, 7, 18, 0, 0, 0),
+                              add_nans=False)
+
+    substore.save(data)
+    messages_dir = queue_dir / 'messages'
+    assert messages_dir.exists() and any(messages_dir.iterdir())
+
+    processed = storage.run_ingest_once()
+    assert processed == 1
+    assert not any(messages_dir.iterdir())
+
+    rsam_path = os.path.join(substore.path, 'rsam.zarr')
+    ds = xr.open_zarr(rsam_path, group='original', chunks=None)
+    np.testing.assert_array_equal(ds['rsam'].loc[dict(
+        datetime=data['rsam'].datetime)].values, data['rsam'].values)
+    ds.close()
+    assert storage.run_ingest_once() == 0
+
+
+def test_ingest_worker_run_forever_stops(tmp_path):
+    worker = IngestWorker(queue_path=str(tmp_path), poll_interval=0.05)
+
+    call_count = {"value": 0}
+
+    def fake_run_once():
+        call_count["value"] += 1
+        return 0  # no messages processed
+
+    worker.run_once = fake_run_once  # monkeypatch
+
+    stop_event = threading.Event()
+    thread = threading.Thread(
+        target=worker.run_forever,
+        kwargs={"stop_event": stop_event},
+        daemon=True,
+    )
+    thread.start()
+
+    time.sleep(0.15)
+    stop_event.set()
+    thread.join(timeout=1)
+
+    assert not thread.is_alive()
+    assert call_count["value"] >= 1
