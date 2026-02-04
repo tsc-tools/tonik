@@ -13,6 +13,8 @@
 	// "forwardPorts": [8003],
 	// "appPort": ["8003:8003"],
 
+	"mounts": ["source=${localEnv:HOME}/.pypirc,target=/home/vscode/.pypirc,type=bind,consistency=cached"],
+
 	// Use 'postCreateCommand' to run commands after the container is created.
 	"postCreateCommand": "pip3 install -e '.[dev]'",
 
