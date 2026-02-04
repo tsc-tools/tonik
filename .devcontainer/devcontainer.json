@@ -14,7 +14,7 @@
 	// "appPort": ["8003:8003"],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	"postCreateCommand": "pip3 install -e . && pip3 install httpx pytest ipykernel hatch",
+	"postCreateCommand": "pip3 install -e '.[dev]'",
 
 	// Configure tool-specific properties.
 	"customizations": {

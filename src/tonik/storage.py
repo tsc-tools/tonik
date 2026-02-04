@@ -1,6 +1,6 @@
+from datetime import datetime
 import json
 import logging
-import logging.config
 import os
 import threading
 from typing import Optional
@@ -16,10 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 class Path(object):
-    def __init__(self, name, parentdir, create=True, backend='zarr', ingest_config=None):
+    def __init__(self, name, parentdir, create=True, backend='zarr',
+                 archive_starttime=datetime(2000, 1, 1), ingest_config=None):
         self.name = name
         self.create = create
         self.backend = backend
+        self.archive_starttime = archive_starttime
         self.engine = 'h5netcdf' if self.backend == 'netcdf' else self.backend
         self.path = os.path.join(parentdir, name)
         if create:
@@ -43,7 +45,8 @@ class Path(object):
             return self.children[key]
         except KeyError:
             self.children[key] = Path(
-                key, self.path, self.create, self.backend, ingest_config=self.ingest_config)
+                key, self.path, self.create, self.backend, self.archive_starttime,
+                ingest_config=self.ingest_config)
             return self.children[key]
 
     def feature_path(self, feature):
@@ -108,9 +111,11 @@ class Path(object):
             return
 
         if self.backend == 'netcdf':
-            xarray2netcdf(data, self.path, **kwargs)
+            xarray2netcdf(data, self.path,
+                          archive_starttime=self.archive_starttime, **kwargs)
         elif self.backend == 'zarr':
-            xarray2zarr(data, self.path, **kwargs)
+            xarray2zarr(data, self.path,
+                        archive_starttime=self.archive_starttime, **kwargs)
 
     def shape(self, feature):
         """
@@ -167,14 +172,16 @@ class Storage(Path):
     """
 
     def __init__(self, name, rootdir, starttime=None, endtime=None, create=True, backend='netcdf',
-                 ingest_config=None):
+                 ingest_config=None, archive_starttime=datetime(2000, 1, 1)):
         self.stores = set()
         self.starttime = starttime
         self.endtime = endtime
+        self.archive_starttime = archive_starttime
         self._ingest_worker: Optional[IngestWorker] = None
         self._ingest_thread: Optional[threading.Thread] = None
         self._ingest_stop_event: Optional[threading.Event] = None
-        super().__init__(name, rootdir, create, backend, ingest_config=ingest_config)
+        super().__init__(name, rootdir, create, backend, archive_starttime,
+                         ingest_config=ingest_config)
 
     def print_tree(self, site, indent=0, output=''):
         output += ' ' * indent + site.path + '\n'

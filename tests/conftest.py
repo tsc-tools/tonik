@@ -47,7 +47,7 @@ def setup(tmp_path_factory):
                   ('filterbank', 'fbfrequency')]
 
     savedir = tmp_path_factory.mktemp('vumt_test_tmp', numbered=True)
-    g = Storage('volcanoes', rootdir=savedir)
+    g = Storage('volcanoes', rootdir=savedir, archive_starttime=tstart)
     c1 = g.get_substore('WIZ', '00', 'HHZ')
     c2 = g.get_substore('MDR', '00', 'BHZ')
     c3 = g.get_substore('MAVZ', '10', 'EHZ')
@@ -96,7 +96,8 @@ def setup_api(setup):
 @pytest.fixture(scope='module')
 def setup_api_zarr(tmp_path_factory):
     savedir = tmp_path_factory.mktemp('vumt_test_tmp_zarr', numbered=True)
-    g = Storage('volcanoes', rootdir=savedir, backend='zarr')
+    g = Storage('volcanoes', rootdir=savedir, backend='zarr',
+                archive_starttime=tstart)
     from tonik.api import TonikAPI
     ta = TonikAPI(str(savedir), backend='zarr')
     client = TestClient(ta.app)

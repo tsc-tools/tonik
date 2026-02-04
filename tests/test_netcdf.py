@@ -45,9 +45,9 @@ def test_xarray2netcdf_archive_starttime(tmp_path_factory):
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime(2000, 1, 1),
                 endtime=datetime.fromisoformat(xdf.attrs['endtime']),
-                backend='netcdf')
+                backend='netcdf', archive_starttime=datetime(2022, 1, 1))
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf, archive_starttime=datetime(2022, 1, 1))
+    c.save(xdf)
 
     xdf_test = c('rsam')
     assert np.all(
@@ -65,10 +65,10 @@ def test_xarray2netcdf_merge_arrays(tmp_path_factory):
     xdf2 = generate_test_data(dim=1, ndays=1, tstart=end, add_nans=False)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
-                backend='netcdf')
+                backend='netcdf', archive_starttime=datetime(2022, 8, 1))
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf2, archive_starttime=datetime(2022, 8, 1))
-    c.save(xdf1, archive_starttime=datetime(2022, 8, 1))
+    c.save(xdf2)
+    c.save(xdf1)
     xdf_test = c('rsam')
     assert xdf_test.isnull().sum() == 24
     assert xdf_test.loc['2022-07-18T08:00:00'] == xdf1['rsam'].loc['2022-07-18T08:00:00']
@@ -82,9 +82,9 @@ def test_xarray2netcdf_resolution(tmp_path_factory):
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime(2000, 1, 1),
                 endtime=datetime.fromisoformat(xdf.attrs['endtime']),
-                backend='netcdf')
+                backend='netcdf', archive_starttime=datetime(2022, 7, 18))
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf, resolution=0.1, archive_starttime=datetime(2022, 7, 18))
+    c.save(xdf, resolution=0.1)
 
     xdf_test = c('rsam')
     xdf_test_meta = c('rsam', metadata=True)
@@ -101,9 +101,9 @@ def test_xarray2netcdf_attributes(tmp_path_factory):
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime(2000, 1, 1),
                 endtime=datetime.fromisoformat(xdf.attrs['endtime']),
-                backend='netcdf')
+                backend='netcdf', archive_starttime=starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf, archive_starttime=starttime)
+    c.save(xdf)
     xdf_test = c('rsam')
     assert xdf_test.attrs['station'] == xdf.attrs['station']
     assert xdf_test.attrs['feature'] == 'rsam'
@@ -117,9 +117,9 @@ def test_xarray2netcdf_metadata(tmp_path_factory):
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime(2000, 1, 1),
                 endtime=datetime.fromisoformat(xdf.attrs['endtime']),
-                backend='netcdf')
+                backend='netcdf', archive_starttime=starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf, archive_starttime=starttime)
+    c.save(xdf)
     starttime = datetime(2022, 7, 19, 0, 0, 0)
     xdf = generate_test_data(dim=1, ndays=1, tstart=starttime,
                              add_nans=False)

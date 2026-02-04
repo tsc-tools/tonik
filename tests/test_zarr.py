@@ -76,10 +76,9 @@ def test_xarray2zarr(tmp_path_factory):
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=datetime.fromisoformat(xdf.attrs['starttime']),
                 endtime=datetime.fromisoformat(xdf.attrs['endtime']),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf, archive_starttime=archive_starttime,
-           chunk_size=144)
+    c.save(xdf, chunk_size=144)
     xdf_test_ssam = c('ssam')
     xdf_test_fb = c('filterbank')
     np.testing.assert_array_equal(xdf['ssam'].values,
@@ -109,9 +108,9 @@ def test_xarray2zarr_with_gaps(tmp_path_factory):
     xdf2 = generate_test_data(dim=1, ndays=1, tstart=end, add_nans=False)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf1, archive_starttime=archive_starttime)
+    c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('rsam')
     assert xdf_test.isnull().sum() == int(
@@ -132,9 +131,9 @@ def test_xarray2zarr_outofsequence(tmp_path_factory):
     xdf3 = generate_test_data(dim=1, intervals=3, tstart=end, seed=44)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf3, chunk_size=10, archive_starttime=archive_starttime)
+    c.save(xdf3, chunk_size=10)
     c.save(xdf1, chunk_size=10)
     c.save(xdf2, chunk_size=10)
     xdf_test = c('rsam')
@@ -159,9 +158,9 @@ def test_xarray2zarr_duplicates(tmp_path_factory):
     xdf2 = generate_test_data(dim=1, ndays=1, tstart=end)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf1, chunk_size=10, archive_starttime=archive_starttime)
+    c.save(xdf1, chunk_size=10)
     c.save(xdf2, chunk_size=10)
     xdf_test = c('rsam')
     assert np.all(xdf_test.loc[dict(datetime=xdf1.datetime)].dropna(
@@ -182,9 +181,9 @@ def test_xarray2zarr_with_overlaps_1D(tmp_path_factory):
     xdf2 = generate_test_data(dim=1, intervals=3, freq='1h', tstart=end)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf1, archive_starttime=archive_starttime)
+    c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('rsam')
     assert (~xdf_test.isnull()).sum() == 5
@@ -206,9 +205,9 @@ def test_xarray2zarr_with_overlaps_2D(tmp_path_factory):
     xdf2 = generate_test_data(dim=2, intervals=3, freq='1h', tstart=end)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=end + timedelta(days=1),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf1, archive_starttime=archive_starttime)
+    c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('ssam')
     assert np.all(~np.isnan(xdf_test.values[:, 0:4]))
@@ -228,9 +227,9 @@ def test_xarray2zarr_overwrite(tmp_path_factory):
                               seed=43)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=start + timedelta(days=1),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf1, archive_starttime=archive_starttime)
+    c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('rsam')
     assert np.all(xdf_test.loc[dict(datetime=xdf1.datetime)] == xdf2['rsam'])
@@ -246,11 +245,11 @@ def test_xarray2zarr_errors(tmp_path_factory):
         dim=1, intervals=3, freq='1h', tstart=start_false)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=start + timedelta(days=1),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf1, archive_starttime=archive_starttime)
+    c.save(xdf1, chunk_size=10)
     with pytest.raises(ValueError):
-        c.save(xdf2)
+        c.save(xdf2, chunk_size=10)
 
 
 def test_xarray2zarr_high_dimensionality(setup_multi_dimensional):
@@ -262,9 +261,9 @@ def test_xarray2zarr_high_dimensionality(setup_multi_dimensional):
     archive_starttime = datetime(2022, 7, 18, 0, 0, 0)
     g = Storage('test_experiment', rootdir=tempdir,
                 starttime=start, endtime=start + timedelta(days=10),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xds, chunk_size=144, archive_starttime=archive_starttime)
+    c.save(xds, chunk_size=144)
     c.save(xds2, chunk_size=144)
     xds_test = c('order2')
     assert np.all(xds_test.loc[dict(datetime=xds.datetime)] == xds['order2'])
@@ -281,9 +280,9 @@ def test_xarray2zarr_metadata(tmp_path_factory):
                               seed=43)
     g = Storage('test_experiment', rootdir=temp_dir,
                 starttime=start, endtime=start + timedelta(days=1),
-                backend='zarr')
+                backend='zarr', archive_starttime=archive_starttime)
     c = g.get_substore('MDR', '00', 'HHZ')
-    c.save(xdf1, archive_starttime=archive_starttime)
+    c.save(xdf1)
     c.save(xdf2)
     xdf_test = c('rsam', metadata=True)
     assert len(xdf_test['update_log'].values) == 2

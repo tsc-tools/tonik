@@ -211,7 +211,7 @@ def _update_meta_data(fout: str,
 
 
 def xarray2zarr(xds: xr.Dataset, path: str, group='original',
-                chunk_size: int = 10, timedim: str = 'datetime', interval: str = None,
+                chunk_size: int = 1000, timedim: str = 'datetime', interval: str = None,
                 archive_starttime: datetime = datetime(2000, 1, 1)) -> None:
     """
     Write xarray dataset to zarr files.
@@ -226,7 +226,7 @@ def xarray2zarr(xds: xr.Dataset, path: str, group='original',
         Write mode, by default 'a'.
     group : str, optional
         Group name, by default 'original'
-    chunks : int, optional
+    chunk_size : int, optional
         Chunk size as the number of days.
     timedim : str
         Name of the time dimension, by default 'datetime'

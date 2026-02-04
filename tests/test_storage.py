@@ -156,16 +156,17 @@ def test_call_single_datapoint(tmp_path_factory):
 
 def test_shape(tmp_path_factory):
     rootdir = tmp_path_factory.mktemp('data')
-    g = Storage('volcanoes', rootdir=rootdir)
     tstart = datetime(2016, 1, 1)
+    g = Storage('volcanoes', rootdir=rootdir, archive_starttime=tstart)
     xdf = generate_test_data(dim=2, intervals=20, tstart=tstart)
-    g.save(xdf, mode='w', archive_starttime=tstart)
+    g.save(xdf, mode='w')
     rsam_shape = g.shape('ssam')
     assert rsam_shape['datetime'] == 20
     assert rsam_shape['frequency'] == 10
 
-    g1 = Storage('volcanoes', rootdir=rootdir, backend='zarr')
-    g1.save(xdf, mode='w', archive_starttime=tstart)
+    g1 = Storage('volcanoes', rootdir=rootdir,
+                 backend='zarr', archive_starttime=tstart)
+    g1.save(xdf, chunk_size=10)
     rsam_shape = g1.shape('ssam')
     assert rsam_shape['datetime'] == 20
     assert rsam_shape['frequency'] == 10
@@ -188,10 +189,10 @@ def test_labels(tmp_path_factory):
 
 def test_attributes_only(tmp_path_factory):
     rootdir = tmp_path_factory.mktemp('data')
-    g = Storage('volcanoes', rootdir=rootdir)
     tstart = datetime(2016, 1, 1)
+    g = Storage('volcanoes', rootdir=rootdir, archive_starttime=tstart)
     xdf = generate_test_data(dim=1, intervals=20, tstart=tstart)
-    g.save(xdf, mode='w', archive_starttime=tstart)
+    g.save(xdf, mode='w')
     ret = g('rsam', metadata=True)
     assert ret['update_log'].values[-1] <= np.datetime64(
         datetime.now(timezone.utc))
@@ -263,19 +264,19 @@ def test_ingest_worker_with_data(tmp_path_factory):
     storage = Storage('test', rootdir=rootdir, backend='zarr',
                       ingest_config={'queue_path': str(queue_dir)},
                       starttime=datetime(2022, 7, 1, 0, 0, 0),
-                      endtime=datetime(2022, 7, 31, 0, 0, 0))
+                      endtime=datetime(2022, 7, 31, 0, 0, 0),
+                      archive_starttime=datetime(2022, 7, 1, 0, 0, 0))
     storage.start_ingest_worker(poll_interval=0.5)
     substore = storage.get_substore('MDR', '00', 'HHZ')
-    archive_starttime = datetime(2022, 7, 1, 0, 0, 0)
     data1 = generate_test_data(dim=1, intervals=3, freq='1h',
                                tstart=datetime(2022, 7, 18, 0, 0, 0),
                                add_nans=False)
-    substore.save(data1, archive_starttime=archive_starttime)
+    substore.save(data1)
     time.sleep(1)
     data2 = generate_test_data(dim=1, intervals=3, freq='1h',
                                tstart=datetime(2022, 7, 18, 2, 0, 0),
                                add_nans=False)
-    substore.save(data2, archive_starttime=archive_starttime)
+    substore.save(data2)
     time.sleep(5)
     xdf_test = substore('rsam')
     np.testing.assert_array_equal(xdf_test.loc[{'datetime': data2.datetime}].values,

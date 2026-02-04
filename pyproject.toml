@@ -12,7 +12,7 @@ exclude = [
 
 [project]
 name = "tonik"
-version = "0.1.21"
+version = "0.1.22"
 authors = [
   { name="Yannik Behr", email="y.behr@gns.cri.nz" },
   { name="Christof Mueller", email="c.mueller@gns.cri.nz" }
@@ -20,38 +20,24 @@ authors = [
 
 description = "Store time series data as HDF5 files and access them through an API."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-    "h5py>=3.8",
-    "datashader>=0.14",
-    "xarray[io,accel,parallel]",
-    "pandas>=2.0",
-    "netcdf4>=1.6",
-    "h5netcdf>=1.1",
-    "python-json-logger>=2.0",
-    "uvicorn[standard]>=0.22",
-    "fastapi>=0.112",
-    "matplotlib",
-    "zarr",
-    "zarr",
-    "s3fs"
-]
 
-[project.optional-dependencies]
-dev = ["pytest",
-       "httpx",
-       "ipykernel",
-       "build",
-       "twine",
-       "mkdocs",
-       "mkdocstrings[python]",
-       "mkdocs-jupyter",
-       "zarr[remote_tests]"]
+dependencies = [
+  "xarray[io,accel,parallel]>=2025.6.1,<2026",
+  "datashader>=0.18.2,<0.19",
+  "h5py>=3.15.1,<4",
+  "pandas>=2.3.3,<3",
+  "h5netcdf>=1.7.3,<2",
+  "uvicorn[standard]>=0.40.0,<0.41",
+  "fastapi>=0.128.0,<0.129",
+  "matplotlib>=3.10.8,<4",
+  "zarr>=3.1.5,<4",
+  "s3fs>=2025.12.0,<2026"]
 
 [project.urls]
 Homepage = "https://tsc-tools.github.io/tonik"
@@ -61,6 +47,20 @@ Issues = "https://github.com/tsc-tools/tonik/issues"
 tonik_api = "tonik.api:main"
 test_data = "tonik.utils:main"
 grafana_annotations = "tonik.grafana_annotations:main"
+
+[project.optional-dependencies]
+dev = ["pytest",
+       "httpx>=0.28.1,<0.29",
+       "ipykernel>=6.31.0,<7",
+       "build>=1.4.0,<2",
+       "twine>=6.2.0,<7",
+       "mkdocs>=1.6.1,<2",
+       "mkdocstrings[python]>=1.0.0,<2",
+       "mkdocs-jupyter>=0.25.1,<0.26",
+       "zarr[remote-tests]>=3.1.5,<4",
+       "moto[s3]>=5.1.19,<6",
+       "hatch>=1.16.2,<2"
+]
 
 [tool.pytest.ini_options]
 log_cli = true
@@ -74,23 +74,7 @@ dependencies = [
 ]
 
 [[tool.hatch.envs.test.matrix]]
-python = ["3.11", "3.9"]
+python = ["3.10", "3.11", "3.12", "3.13"]
 
 [tool.hatch.envs.test.scripts]
 run-pytest = "pytest tests"
-
-[tool.pixi.workspace]
-channels = ["conda-forge"]
-platforms = ["linux-64"]
-
-[tool.pixi.pypi-dependencies]
-tonik = { path = ".", editable = true }
-
-[tool.pixi.environments]
-default = { solve-group = "default" }
-dev = { features = ["dev"], solve-group = "default" }
-
-[tool.pixi.tasks]
-
-[tool.pixi.dependencies]
-python = "3.11.*"
