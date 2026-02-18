@@ -3,14 +3,9 @@ import logging
 import logging.config
 import os
 
+import numpy as np
+import torch
 import xarray as xr
-
-try:
-    import torch
-    import numpy as np
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
 
 from .xarray2netcdf import xarray2netcdf
 from .xarray2zarr import xarray2zarr
@@ -340,15 +335,9 @@ class Storage(Path):
         >>> dataset = g.to_pytorch(['rsam', 'dsar'])
         >>> dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
         >>> for batch in dataloader:
-        ...     # batch is a dict with feature names as keys
+        ...     # batch is a 2D tensor with shape [batch_size, num_features]
         ...     pass
         """
-        if not TORCH_AVAILABLE:
-            raise ImportError(
-                "PyTorch is required to use to_pytorch(). "
-                "Install it with: pip install torch or pip install tonik[pytorch]"
-            )
-        
         return TonikPyTorchDataset(self, features, window_size)
 
 
@@ -357,7 +346,8 @@ class TonikPyTorchDataset:
     PyTorch Dataset wrapper for Tonik Storage.
     
     This dataset loads time series data from Storage and returns it as PyTorch tensors.
-    Each sample contains data from one or more consecutive time steps (controlled by window_size).
+    Each sample is a 2D tensor with shape [window_size, num_features] where features
+    are ordered as provided to __init__.
     """
     
     def __init__(self, storage, features, window_size=1):
@@ -368,12 +358,6 @@ class TonikPyTorchDataset:
         :param features: List of feature names to load
         :param window_size: Number of consecutive time steps per sample
         """
-        if not TORCH_AVAILABLE:
-            raise ImportError(
-                "PyTorch is required to use TonikPyTorchDataset. "
-                "Install it with: pip install torch or pip install tonik[pytorch]"
-            )
-        
         if storage.starttime is None or storage.endtime is None:
             raise ValueError("Storage must have starttime and endtime set")
         
@@ -408,12 +392,14 @@ class TonikPyTorchDataset:
         Get a sample from the dataset.
         
         :param idx: Index of the sample
-        :return: Dictionary with feature names as keys and PyTorch tensors as values
+        :return: 2D PyTorch tensor with shape [window_size, num_features]
+                 where features are in the order provided to __init__
         """
         if idx >= len(self):
             raise IndexError(f"Index {idx} out of range for dataset of length {len(self)}")
         
-        sample = {}
+        # Collect values for all features in order
+        feature_values = []
         for feature in self.features:
             data = self.data[feature]
             
@@ -426,7 +412,15 @@ class TonikPyTorchDataset:
             # Handle NaN values by converting to numpy array first
             values = np.array(values, dtype=np.float32)
             
-            # Convert to PyTorch tensor
-            sample[feature] = torch.from_numpy(values)
+            # Ensure values is 1D
+            if values.ndim == 0:
+                values = values.reshape(1)
+            
+            feature_values.append(values)
         
-        return sample
+        # Stack features along axis 1 to create [window_size, num_features] tensor
+        # If window_size=1, each feature_values[i] has shape (1,)
+        # Stack them to get shape [1, num_features], then we have [window_size, num_features]
+        stacked = np.stack(feature_values, axis=-1)  # Shape: [window_size, num_features]
+        
+        return torch.from_numpy(stacked)

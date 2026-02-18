@@ -39,6 +39,7 @@ dependencies = [
     "matplotlib",
     "zarr>=3.0.3; python_version >= '3.11'",
     "zarr<3; python_version < '3.11'",
+    "torch",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +49,6 @@ dev = ["pytest",
        "mkdocs",
        "mkdocstrings[python]",
        "mkdocs-jupyter"]
-pytorch = ["torch"]
 
 [project.urls]
 Homepage = "https://tsc-tools.github.io/tonik"

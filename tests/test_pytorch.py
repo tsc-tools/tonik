@@ -3,16 +3,8 @@ from datetime import datetime
 import numpy as np
 
 from tonik import Storage, generate_test_data
-
-# Check if PyTorch is available
-try:
-    import torch
-    from torch.utils.data import DataLoader
-    PYTORCH_AVAILABLE = True
-except ImportError:
-    PYTORCH_AVAILABLE = False
-
-pytestmark = pytest.mark.skipif(not PYTORCH_AVAILABLE, reason="PyTorch not installed")
+import torch
+from torch.utils.data import DataLoader
 
 
 def test_to_pytorch_basic(tmp_path_factory):
@@ -39,18 +31,15 @@ def test_to_pytorch_basic(tmp_path_factory):
     # Get first sample
     sample = dataset[0]
     
-    # Check that sample is a dict with the expected keys
-    assert isinstance(sample, dict)
-    assert 'rsam' in sample
-    assert 'dsar' in sample
+    # Check that sample is a 2D tensor
+    assert torch.is_tensor(sample)
+    assert sample.ndim == 2
     
-    # Check that values are PyTorch tensors
-    assert torch.is_tensor(sample['rsam'])
-    assert torch.is_tensor(sample['dsar'])
+    # Check shape: [window_size=1, num_features=2]
+    assert sample.shape == (1, 2)
     
     # Check tensor dtype
-    assert sample['rsam'].dtype == torch.float32
-    assert sample['dsar'].dtype == torch.float32
+    assert sample.dtype == torch.float32
 
 
 def test_to_pytorch_with_dataloader(tmp_path_factory):
@@ -76,12 +65,14 @@ def test_to_pytorch_with_dataloader(tmp_path_factory):
     batch_count = 0
     for batch in dataloader:
         batch_count += 1
-        # Check batch structure
-        assert isinstance(batch, dict)
-        assert 'rsam' in batch
-        assert torch.is_tensor(batch['rsam'])
+        # Check batch structure - should be a 3D tensor [batch_size, window_size, num_features]
+        assert torch.is_tensor(batch)
+        assert batch.ndim == 3
         # Check batch size (last batch might be smaller)
-        assert batch['rsam'].shape[0] <= 4
+        assert batch.shape[0] <= 4
+        # window_size=1, num_features=1
+        assert batch.shape[1] == 1
+        assert batch.shape[2] == 1
     
     # Check that we got some batches
     assert batch_count > 0
@@ -109,12 +100,12 @@ def test_to_pytorch_window_size(tmp_path_factory):
     # Get first sample
     sample = dataset[0]
     
-    # Check that the sample has the correct window size
-    assert sample['rsam'].shape[0] == window_size
+    # Check that the sample has the correct shape: [window_size, num_features]
+    assert sample.shape == (window_size, 1)
 
 
 def test_to_pytorch_single_feature(tmp_path_factory):
-    """Test to_pytorch with a single feature as string."""
+    """Test to_pytorch with a single feature."""
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
     startdate = datetime(2023, 1, 1)
@@ -128,13 +119,48 @@ def test_to_pytorch_single_feature(tmp_path_factory):
     g.starttime = startdate
     g.endtime = enddate
     
-    # Create PyTorch dataset with single feature as string
+    # Create PyTorch dataset with single feature
     dataset = g.to_pytorch(['rsam'])
     
     # Check that it works
     assert len(dataset) > 0
     sample = dataset[0]
-    assert 'rsam' in sample
+    # Shape should be [window_size=1, num_features=1]
+    assert sample.shape == (1, 1)
+
+
+def test_to_pytorch_multiple_features(tmp_path_factory):
+    """Test to_pytorch with multiple features maintains order."""
+    rootdir = tmp_path_factory.mktemp('data')
+    g = Storage('volcanoes', rootdir=rootdir)
+    startdate = datetime(2023, 1, 1)
+    enddate = datetime(2023, 1, 1, 12)
+    
+    # Generate and save test data
+    xdf = generate_test_data(dim=1, ndays=3, tstart=startdate)
+    g.save(xdf)
+    
+    # Set time range
+    g.starttime = startdate
+    g.endtime = enddate
+    
+    # Create PyTorch dataset with multiple features
+    dataset = g.to_pytorch(['rsam', 'dsar'])
+    
+    # Get first sample
+    sample = dataset[0]
+    
+    # Shape should be [window_size=1, num_features=2]
+    assert sample.shape == (1, 2)
+    
+    # Verify the features are in the correct order by checking values
+    # Get the actual data to compare
+    rsam_val = g('rsam').isel(datetime=0).values
+    dsar_val = g('dsar').isel(datetime=0).values
+    
+    # First column should be rsam, second should be dsar
+    assert np.isclose(sample[0, 0].item(), rsam_val, rtol=1e-5)
+    assert np.isclose(sample[0, 1].item(), dsar_val, rtol=1e-5)
 
 
 def test_to_pytorch_no_time_range(tmp_path_factory):
@@ -190,8 +216,11 @@ def test_to_pytorch_shuffle_dataloader(tmp_path_factory):
     batch_count = 0
     for batch in dataloader:
         batch_count += 1
-        assert isinstance(batch, dict)
-        assert 'rsam' in batch
-        assert 'dsar' in batch
+        # Check batch is a 3D tensor [batch_size, window_size, num_features]
+        assert torch.is_tensor(batch)
+        assert batch.ndim == 3
+        assert batch.shape[1] == 1  # window_size
+        assert batch.shape[2] == 2  # num_features
     
     assert batch_count > 0
+
