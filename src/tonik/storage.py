@@ -313,3 +313,122 @@ class Storage(Path):
 
     starttime = property(get_starttime, set_starttime)
     endtime = property(get_endtime, set_endtime)
+
+    def to_pytorch(self, features, window_size=1):
+        """
+        Create a PyTorch Dataset from the Storage that can be used with DataLoader.
+        
+        :param features: List of feature names to include in the dataset
+        :type features: list of str
+        :param window_size: Number of consecutive time steps to include in each sample (default: 1)
+        :type window_size: int
+        :return: PyTorch Dataset instance
+        :rtype: TonikPyTorchDataset
+        
+        >>> import datetime
+        >>> from torch.utils.data import DataLoader
+        >>> g = Storage('Whakaari', '/tmp')
+        >>> g.starttime = datetime.datetime(2012,1,1,0,0,0)
+        >>> g.endtime = datetime.datetime(2012,1,2,23,59,59)
+        >>> dataset = g.to_pytorch(['rsam', 'dsar'])
+        >>> dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+        >>> for batch in dataloader:
+        ...     # batch is a dict with feature names as keys
+        ...     pass
+        """
+        try:
+            import torch
+            from torch.utils.data import Dataset
+        except ImportError:
+            raise ImportError(
+                "PyTorch is required to use to_pytorch(). "
+                "Install it with: pip install torch or pip install tonik[pytorch]"
+            )
+        
+        return TonikPyTorchDataset(self, features, window_size)
+
+
+class TonikPyTorchDataset:
+    """
+    PyTorch Dataset wrapper for Tonik Storage.
+    
+    This dataset loads time series data from Storage and returns it as PyTorch tensors.
+    Each sample contains data from one or more consecutive time steps (controlled by window_size).
+    """
+    
+    def __init__(self, storage, features, window_size=1):
+        """
+        Initialize the dataset.
+        
+        :param storage: Storage instance with starttime and endtime set
+        :param features: List of feature names to load
+        :param window_size: Number of consecutive time steps per sample
+        """
+        try:
+            import torch
+            import numpy as np
+        except ImportError:
+            raise ImportError(
+                "PyTorch is required to use TonikPyTorchDataset. "
+                "Install it with: pip install torch or pip install tonik[pytorch]"
+            )
+        
+        if storage.starttime is None or storage.endtime is None:
+            raise ValueError("Storage must have starttime and endtime set")
+        
+        self.storage = storage
+        self.features = features if isinstance(features, list) else [features]
+        self.window_size = window_size
+        
+        # Load all features once to determine the data structure
+        self.data = {}
+        for feature in self.features:
+            try:
+                self.data[feature] = self.storage(feature)
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Feature '{feature}' not found in storage")
+        
+        # Get the length from the first feature
+        first_feature = self.features[0]
+        self.length = len(self.data[first_feature].datetime) - window_size + 1
+        
+        if self.length <= 0:
+            raise ValueError(
+                f"Not enough data points for window_size={window_size}. "
+                f"Available data points: {len(self.data[first_feature].datetime)}"
+            )
+    
+    def __len__(self):
+        """Return the number of samples in the dataset."""
+        return self.length
+    
+    def __getitem__(self, idx):
+        """
+        Get a sample from the dataset.
+        
+        :param idx: Index of the sample
+        :return: Dictionary with feature names as keys and PyTorch tensors as values
+        """
+        import torch
+        import numpy as np
+        
+        if idx >= len(self):
+            raise IndexError(f"Index {idx} out of range for dataset of length {len(self)}")
+        
+        sample = {}
+        for feature in self.features:
+            data = self.data[feature]
+            
+            # Extract window of data
+            if self.window_size == 1:
+                values = data.isel(datetime=idx).values
+            else:
+                values = data.isel(datetime=slice(idx, idx + self.window_size)).values
+            
+            # Handle NaN values by converting to numpy array first
+            values = np.array(values, dtype=np.float32)
+            
+            # Convert to PyTorch tensor
+            sample[feature] = torch.from_numpy(values)
+        
+        return sample

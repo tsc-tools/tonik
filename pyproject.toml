@@ -48,6 +48,7 @@ dev = ["pytest",
        "mkdocs",
        "mkdocstrings[python]",
        "mkdocs-jupyter"]
+pytorch = ["torch"]
 
 [project.urls]
 Homepage = "https://tsc-tools.github.io/tonik"
