@@ -5,7 +5,7 @@
 Tonik is a Python library that provides a solution to store and retrieve scientific time-series data, serving it through a FastAPI-based API. The API is optimized to visualize time-series and data labels with Grafana, featuring on-demand downsampling for large requests.
 
 **Key Technologies:**
-- Python 3.9+ (currently tested on 3.9 and 3.11)
+- Python 3.9+ (automated tests run on Python 3.9 and 3.11 via hatch)
 - FastAPI for the REST API
 - HDF5/NetCDF4/Zarr for data storage
 - xarray, pandas, datashader for data processing
@@ -170,7 +170,7 @@ All API endpoints support CORS with `allow_origins=["*"]`.
 
 2. **Test data**: Tests create temporary HDF5/NetCDF files. These are cleaned up automatically by pytest's `tmp_path_factory`
 
-3. **Dependency conflicts**: The project uses `zarr>=3.0.3` for Python 3.11+ and `zarr<3` for older versions
+3. **Dependency conflicts**: The project uses `zarr>=3.0.3` for Python 3.11+ and `zarr<3` for Python 3.9 and 3.10 (see pyproject.toml dependencies)
 
 4. **Python version**: Project requires Python 3.9+. Devcontainer uses Python 3.9.
 
