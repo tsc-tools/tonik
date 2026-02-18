@@ -5,6 +5,13 @@ import os
 
 import xarray as xr
 
+try:
+    import torch
+    import numpy as np
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
 from .xarray2netcdf import xarray2netcdf
 from .xarray2zarr import xarray2zarr
 
@@ -336,10 +343,7 @@ class Storage(Path):
         ...     # batch is a dict with feature names as keys
         ...     pass
         """
-        try:
-            import torch
-            from torch.utils.data import Dataset
-        except ImportError:
+        if not TORCH_AVAILABLE:
             raise ImportError(
                 "PyTorch is required to use to_pytorch(). "
                 "Install it with: pip install torch or pip install tonik[pytorch]"
@@ -364,10 +368,7 @@ class TonikPyTorchDataset:
         :param features: List of feature names to load
         :param window_size: Number of consecutive time steps per sample
         """
-        try:
-            import torch
-            import numpy as np
-        except ImportError:
+        if not TORCH_AVAILABLE:
             raise ImportError(
                 "PyTorch is required to use TonikPyTorchDataset. "
                 "Install it with: pip install torch or pip install tonik[pytorch]"
@@ -409,9 +410,6 @@ class TonikPyTorchDataset:
         :param idx: Index of the sample
         :return: Dictionary with feature names as keys and PyTorch tensors as values
         """
-        import torch
-        import numpy as np
-        
         if idx >= len(self):
             raise IndexError(f"Index {idx} out of range for dataset of length {len(self)}")
         

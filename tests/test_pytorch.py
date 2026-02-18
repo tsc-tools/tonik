@@ -195,11 +195,3 @@ def test_to_pytorch_shuffle_dataloader(tmp_path_factory):
         assert 'dsar' in batch
     
     assert batch_count > 0
-
-
-def test_to_pytorch_without_pytorch_installed():
-    """Test that appropriate error is raised when PyTorch is not installed."""
-    # This test is a bit tricky since we're in an environment where PyTorch might be installed
-    # We'll just document the expected behavior
-    # In a real scenario without PyTorch, calling to_pytorch() should raise ImportError
-    pass
