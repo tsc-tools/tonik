@@ -3,6 +3,8 @@ import logging
 import logging.config
 import os
 
+import numpy as np
+import torch
 import xarray as xr
 
 from .xarray2netcdf import xarray2netcdf
@@ -313,3 +315,126 @@ class Storage(Path):
 
     starttime = property(get_starttime, set_starttime)
     endtime = property(get_endtime, set_endtime)
+
+    def to_pytorch(self, features, window_size=1, stride=1):
+        """
+        Create a PyTorch Dataset from the Storage that can be used with DataLoader.
+        
+        :param features: List of feature names to include in the dataset
+        :type features: list of str
+        :param window_size: Number of consecutive time steps to include in each sample (default: 1)
+        :type window_size: int
+        :param stride: Step size between consecutive windows (default: 1)
+        :type stride: int
+        :return: PyTorch Dataset instance
+        :rtype: TonikDataset
+        
+        >>> import datetime
+        >>> from torch.utils.data import DataLoader
+        >>> g = Storage('Whakaari', '/tmp')
+        >>> g.starttime = datetime.datetime(2012,1,1,0,0,0)
+        >>> g.endtime = datetime.datetime(2012,1,2,23,59,59)
+        >>> dataset = g.to_pytorch(['rsam', 'dsar'])
+        >>> dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+        >>> for batch in dataloader:
+        ...     # batch is a 2D tensor with shape [batch_size, num_features]
+        ...     pass
+        """
+        return TonikDataset(self, features, window_size, stride)
+
+
+class TonikDataset:
+    """
+    PyTorch Dataset wrapper for Tonik Storage.
+    
+    This dataset loads time series data from Storage and returns it as PyTorch tensors.
+    Each sample is a 2D tensor with shape [window_size, num_features] where features
+    are ordered as provided to __init__.
+    """
+    
+    def __init__(self, storage, features, window_size=1, stride=1):
+        """
+        Initialize the dataset.
+        
+        :param storage: Storage instance with starttime and endtime set
+        :param features: List of feature names to load
+        :param window_size: Number of consecutive time steps per sample
+        :param stride: Step size between consecutive windows (default: 1)
+        """
+        if storage.starttime is None or storage.endtime is None:
+            raise ValueError("Storage must have starttime and endtime set")
+        
+        self.storage = storage
+        self.features = features if isinstance(features, list) else [features]
+        self.window_size = window_size
+        self.stride = stride
+        
+        # Load all features once to determine the data structure
+        self.data = {}
+        for feature in self.features:
+            try:
+                self.data[feature] = self.storage(feature)
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Feature '{feature}' not found in storage")
+        
+        # Get the length from the first feature
+        first_feature = self.features[0]
+        total_timesteps = len(self.data[first_feature].datetime)
+        
+        # Calculate number of windows with given stride
+        # Number of windows = (total_timesteps - window_size) // stride + 1
+        if total_timesteps < window_size:
+            self.length = 0
+        else:
+            self.length = (total_timesteps - window_size) // stride + 1
+        
+        if self.length <= 0:
+            raise ValueError(
+                f"Not enough data points for window_size={window_size} with stride={stride}. "
+                f"Available data points: {total_timesteps}"
+            )
+    
+    def __len__(self):
+        """Return the number of samples in the dataset."""
+        return self.length
+    
+    def __getitem__(self, idx):
+        """
+        Get a sample from the dataset.
+        
+        :param idx: Index of the sample
+        :return: 2D PyTorch tensor with shape [window_size, num_features]
+                 where features are in the order provided to __init__
+        """
+        if idx >= len(self):
+            raise IndexError(f"Index {idx} out of range for dataset of length {len(self)}")
+        
+        # Calculate the actual starting index based on stride
+        start_idx = idx * self.stride
+        
+        # Collect values for all features in order
+        feature_values = []
+        for feature in self.features:
+            data = self.data[feature]
+            
+            # Extract window of data
+            if self.window_size == 1:
+                values = data.isel(datetime=start_idx).values
+            else:
+                values = data.isel(datetime=slice(start_idx, start_idx + self.window_size)).values
+            
+            # Handle NaN values by converting to numpy array first
+            values = np.array(values, dtype=np.float32)
+            
+            # Ensure values is 1D
+            if values.ndim == 0:
+                values = values.reshape(1)
+            
+            feature_values.append(values)
+        
+        # Stack features along axis 1 to create [window_size, num_features] tensor
+        # If window_size=1, each feature_values[i] has shape (1,)
+        # Stack them to get shape [1, num_features], then we have [window_size, num_features]
+        stacked = np.stack(feature_values, axis=-1)  # Shape: [window_size, num_features]
+        
+        return torch.from_numpy(stacked)
