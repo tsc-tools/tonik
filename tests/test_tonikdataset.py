@@ -7,8 +7,8 @@ import torch
 from torch.utils.data import DataLoader
 
 
-def test_to_pytorch_basic(tmp_path_factory):
-    """Test basic to_pytorch functionality with single time step."""
+def test_basic(tmp_path_factory):
+    """Test basic functionality with single time step."""
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
     startdate = datetime(2023, 1, 1)
@@ -42,7 +42,7 @@ def test_to_pytorch_basic(tmp_path_factory):
     assert sample.dtype == torch.float32
 
 
-def test_to_pytorch_with_dataloader(tmp_path_factory):
+def test_with_dataloader(tmp_path_factory):
     """Test that PyTorch dataset works with DataLoader."""
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
@@ -78,8 +78,8 @@ def test_to_pytorch_with_dataloader(tmp_path_factory):
     assert batch_count > 0
 
 
-def test_to_pytorch_window_size(tmp_path_factory):
-    """Test to_pytorch with window_size > 1."""
+def test_window_size(tmp_path_factory):
+    """Test with window_size > 1."""
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
     startdate = datetime(2023, 1, 1)
@@ -104,8 +104,8 @@ def test_to_pytorch_window_size(tmp_path_factory):
     assert sample.shape == (window_size, 1)
 
 
-def test_to_pytorch_single_feature(tmp_path_factory):
-    """Test to_pytorch with a single feature."""
+def test_single_feature(tmp_path_factory):
+    """Test with a single feature."""
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
     startdate = datetime(2023, 1, 1)
@@ -129,8 +129,8 @@ def test_to_pytorch_single_feature(tmp_path_factory):
     assert sample.shape == (1, 1)
 
 
-def test_to_pytorch_multiple_features(tmp_path_factory):
-    """Test to_pytorch with multiple features maintains order."""
+def test_multiple_features(tmp_path_factory):
+    """Test with multiple features maintains order."""
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
     startdate = datetime(2023, 1, 1)
@@ -163,8 +163,8 @@ def test_to_pytorch_multiple_features(tmp_path_factory):
     assert np.isclose(sample[0, 1].item(), dsar_val, rtol=1e-5)
 
 
-def test_to_pytorch_no_time_range(tmp_path_factory):
-    """Test that to_pytorch raises error when starttime/endtime not set."""
+def test_no_time_range(tmp_path_factory):
+    """Test that raises error when starttime/endtime not set."""
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
     
@@ -173,8 +173,8 @@ def test_to_pytorch_no_time_range(tmp_path_factory):
         dataset = g.to_pytorch(['rsam'])
 
 
-def test_to_pytorch_missing_feature(tmp_path_factory):
-    """Test that to_pytorch raises error for non-existent feature."""
+def test_missing_feature(tmp_path_factory):
+    """Test that raises error for non-existent feature."""
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
     startdate = datetime(2023, 1, 1)
@@ -193,7 +193,7 @@ def test_to_pytorch_missing_feature(tmp_path_factory):
         dataset = g.to_pytorch(['non_existent_feature'])
 
 
-def test_to_pytorch_shuffle_dataloader(tmp_path_factory):
+def test_shuffle_dataloader(tmp_path_factory):
     """Test that PyTorch dataset works with shuffled DataLoader."""
     rootdir = tmp_path_factory.mktemp('data')
     g = Storage('volcanoes', rootdir=rootdir)
@@ -224,3 +224,49 @@ def test_to_pytorch_shuffle_dataloader(tmp_path_factory):
     
     assert batch_count > 0
 
+
+def test_stride(tmp_path_factory):
+    """Test dataset with stride parameter."""
+    rootdir = tmp_path_factory.mktemp('data')
+    g = Storage('volcanoes', rootdir=rootdir)
+    startdate = datetime(2023, 1, 1)
+    enddate = datetime(2023, 1, 2)
+    
+    # Generate and save test data
+    xdf = generate_test_data(dim=1, ndays=3, tstart=startdate)
+    g.save(xdf)
+    
+    # Set time range
+    g.starttime = startdate
+    g.endtime = enddate
+    
+    # Create dataset with stride=2
+    window_size = 5
+    stride = 2
+    dataset = g.to_pytorch(['rsam'], window_size=window_size, stride=stride)
+    
+    # Get first two samples
+    sample0 = dataset[0]
+    sample1 = dataset[1]
+    
+    # Check shapes
+    assert sample0.shape == (window_size, 1)
+    assert sample1.shape == (window_size, 1)
+    
+    # Verify that sample1 starts 'stride' positions after sample0
+    # Get the actual data
+    rsam_data = g('rsam')
+    
+    # First sample should start at index 0
+    expected_sample0_start = rsam_data.isel(datetime=0).values
+    assert np.isclose(sample0[0, 0].item(), expected_sample0_start, rtol=1e-5)
+    
+    # Second sample should start at index stride (2)
+    expected_sample1_start = rsam_data.isel(datetime=stride).values
+    assert np.isclose(sample1[0, 0].item(), expected_sample1_start, rtol=1e-5)
+    
+    # Calculate expected length with stride
+    # Formula: (total_timesteps - window_size) // stride + 1
+    total_timesteps = len(rsam_data.datetime)
+    expected_length = (total_timesteps - window_size) // stride + 1
+    assert len(dataset) == expected_length

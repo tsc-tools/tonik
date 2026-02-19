@@ -316,7 +316,7 @@ class Storage(Path):
     starttime = property(get_starttime, set_starttime)
     endtime = property(get_endtime, set_endtime)
 
-    def to_pytorch(self, features, window_size=1):
+    def to_pytorch(self, features, window_size=1, stride=1):
         """
         Create a PyTorch Dataset from the Storage that can be used with DataLoader.
         
@@ -324,8 +324,10 @@ class Storage(Path):
         :type features: list of str
         :param window_size: Number of consecutive time steps to include in each sample (default: 1)
         :type window_size: int
+        :param stride: Step size between consecutive windows (default: 1)
+        :type stride: int
         :return: PyTorch Dataset instance
-        :rtype: TonikPyTorchDataset
+        :rtype: TonikDataset
         
         >>> import datetime
         >>> from torch.utils.data import DataLoader
@@ -338,10 +340,10 @@ class Storage(Path):
         ...     # batch is a 2D tensor with shape [batch_size, num_features]
         ...     pass
         """
-        return TonikPyTorchDataset(self, features, window_size)
+        return TonikDataset(self, features, window_size, stride)
 
 
-class TonikPyTorchDataset:
+class TonikDataset:
     """
     PyTorch Dataset wrapper for Tonik Storage.
     
@@ -350,13 +352,14 @@ class TonikPyTorchDataset:
     are ordered as provided to __init__.
     """
     
-    def __init__(self, storage, features, window_size=1):
+    def __init__(self, storage, features, window_size=1, stride=1):
         """
         Initialize the dataset.
         
         :param storage: Storage instance with starttime and endtime set
         :param features: List of feature names to load
         :param window_size: Number of consecutive time steps per sample
+        :param stride: Step size between consecutive windows (default: 1)
         """
         if storage.starttime is None or storage.endtime is None:
             raise ValueError("Storage must have starttime and endtime set")
@@ -364,6 +367,7 @@ class TonikPyTorchDataset:
         self.storage = storage
         self.features = features if isinstance(features, list) else [features]
         self.window_size = window_size
+        self.stride = stride
         
         # Load all features once to determine the data structure
         self.data = {}
@@ -375,12 +379,19 @@ class TonikPyTorchDataset:
         
         # Get the length from the first feature
         first_feature = self.features[0]
-        self.length = len(self.data[first_feature].datetime) - window_size + 1
+        total_timesteps = len(self.data[first_feature].datetime)
+        
+        # Calculate number of windows with given stride
+        # Number of windows = (total_timesteps - window_size) // stride + 1
+        if total_timesteps < window_size:
+            self.length = 0
+        else:
+            self.length = (total_timesteps - window_size) // stride + 1
         
         if self.length <= 0:
             raise ValueError(
-                f"Not enough data points for window_size={window_size}. "
-                f"Available data points: {len(self.data[first_feature].datetime)}"
+                f"Not enough data points for window_size={window_size} with stride={stride}. "
+                f"Available data points: {total_timesteps}"
             )
     
     def __len__(self):
@@ -398,6 +409,9 @@ class TonikPyTorchDataset:
         if idx >= len(self):
             raise IndexError(f"Index {idx} out of range for dataset of length {len(self)}")
         
+        # Calculate the actual starting index based on stride
+        start_idx = idx * self.stride
+        
         # Collect values for all features in order
         feature_values = []
         for feature in self.features:
@@ -405,9 +419,9 @@ class TonikPyTorchDataset:
             
             # Extract window of data
             if self.window_size == 1:
-                values = data.isel(datetime=idx).values
+                values = data.isel(datetime=start_idx).values
             else:
-                values = data.isel(datetime=slice(idx, idx + self.window_size)).values
+                values = data.isel(datetime=slice(start_idx, start_idx + self.window_size)).values
             
             # Handle NaN values by converting to numpy array first
             values = np.array(values, dtype=np.float32)
