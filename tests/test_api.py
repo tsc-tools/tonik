@@ -216,33 +216,29 @@ def test_aggregate1DFeature(setup_api):
 
 def test_inventory(setup_api):
     client, fq = setup_api
+    expected_feature_names = sorted(["sonogram", "predom_freq", "ssam", "bandwidth",
+                                     "filterbank", "central_freq", "rsam", "dsar",
+                                     "rsam_energy_prop", "autoencoder"])
+    required_keys = {'name', 'recordCount',
+                     'earliestRecord', 'latestRecord', 'url'}
+
+    # --- tree view (default) ---
     params = dict(group='volcanoes')
     with client.stream("GET", "/inventory", params=params) as r:
         r.read()
         txt = r.text
-    features = sorted(["sonogram", "predom_freq", "ssam", "bandwidth",
-                       "filterbank", "central_freq", "rsam", "dsar",
-                       "rsam_energy_prop", "autoencoder"])
-    result_expected = {"volcanoes": [
-        {"MDR": [
-            {"00": [
-                {"BHZ": features}
-            ]
-            }
-        ]
-        }
-    ]
-    }
     result_test = json.loads(txt)
-    assert result_test['volcanoes'][1] == result_expected['volcanoes'][0]
+    bhz_features = result_test['volcanoes']['MDR']['00']['BHZ']
+    # each feature is now a dict keyed by feature name
+    assert all(isinstance(f, dict) for f in bhz_features.values())
+    assert sorted(bhz_features.keys()) == expected_feature_names
+    for feat_name, feat in bhz_features.items():
+        assert required_keys.issubset(feat.keys())
+        assert feat['recordCount'] > 0
+        assert 'feature' in feat['url']
+        assert feat_name in feat['url']
 
-    with client.stream("GET", "/inventory", params=params) as r:
-        r.read()
-        txt = r.text
-    result_test = json.loads(txt)
-    test_features = result_test['volcanoes'][1]['MDR'][0]['00'][0]['BHZ']
-    assert sorted(test_features) == features
-
+    # --- tree=False returns top-level subdirs as plain strings ---
     params = dict(group='volcanoes', tree=False)
     with client.stream("GET", "/inventory", params=params) as r:
         r.read()
@@ -250,12 +246,18 @@ def test_inventory(setup_api):
     result_test = json.loads(txt)
     assert sorted(result_test) == sorted(['MAVZ', 'WIZ', 'MDR', 'MMS'])
 
+    # --- explicit subdir returns feature info dicts ---
     params = dict(group='volcanoes', subdir=['MDR', '00', 'BHZ'])
     with client.stream("GET", "/inventory", params=params) as r:
         r.read()
         txt = r.text
     result_test = json.loads(txt)
-    assert sorted(test_features) == sorted(result_test)
+    assert all(isinstance(f, dict) for f in result_test)
+    assert sorted(f['name'] for f in result_test) == expected_feature_names
+    for feat in result_test:
+        assert required_keys.issubset(feat.keys())
+        assert feat['recordCount'] > 0
+        assert 'MDR' in feat['url'] and '00' in feat['url'] and 'BHZ' in feat['url']
 
 
 def test_labels(setup_api):

@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import uvicorn
 from cftime import date2num, num2pydate
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 
@@ -147,7 +147,7 @@ class TonikAPI:
             d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
         return freq, dates, spec
 
-    async def inventory(self, group: str, subdir: SubdirType = None, tree: bool = True) -> InventoryReturnType:
+    async def inventory(self, request: Request, group: str, subdir: SubdirType = None, tree: bool = True) -> InventoryReturnType:
         sg = Storage(group, rootdir=self.rootdir,
                      create=False, backend=self.backend)
         try:
@@ -158,13 +158,43 @@ class TonikAPI:
             msg = "Directory {} not found.".format(
                 '/'.join([sg.path] + subdir))
             raise HTTPException(status_code=404, detail=msg)
+        base_url = str(request.base_url)
         if tree and not subdir:
-            return sg.to_dict()
+            return sg.to_dict_with_info(base_url)
         else:
             dir_contents = os.listdir(c.path)
             if 'labels.json' in dir_contents:
                 dir_contents.remove('labels.json')
-            return [fn.replace('.nc', '').replace('.zarr', '') for fn in dir_contents]
+            result = []
+            for fn in sorted(dir_contents):
+                full_path = os.path.join(c.path, fn)
+                if fn.endswith('.nc'):
+                    feature_name = fn.replace('.nc', '')
+                    info = c.get_feature_info(feature_name)
+                    rel = os.path.relpath(c.path, os.path.join(self.rootdir, group))
+                    subdirs_list = rel.split(os.sep) if rel != '.' else []
+                    subdir_params = ''.join(f'&subdir={s}' for s in subdirs_list)
+                    info['url'] = (
+                        f"{base_url}feature?group={group}"
+                        f"{subdir_params}&name={feature_name}"
+                        f"&starttime={info['earliestRecord']}&endtime={info['latestRecord']}"
+                    )
+                    result.append(info)
+                elif fn.endswith('.zarr') and os.path.isdir(full_path):
+                    feature_name = fn.replace('.zarr', '')
+                    info = c.get_feature_info(feature_name)
+                    rel = os.path.relpath(c.path, os.path.join(self.rootdir, group))
+                    subdirs_list = rel.split(os.sep) if rel != '.' else []
+                    subdir_params = ''.join(f'&subdir={s}' for s in subdirs_list)
+                    info['url'] = (
+                        f"{base_url}feature?group={group}"
+                        f"{subdir_params}&name={feature_name}"
+                        f"&starttime={info['earliestRecord']}&endtime={info['latestRecord']}"
+                    )
+                    result.append(info)
+                else:
+                    result.append(fn)
+            return result
 
     async def labels(self, group: str, subdir: SubdirType = None, starttime: Optional[str] = None, endtime: Optional[str] = None):
         _st = self.preprocess_datetime(starttime)

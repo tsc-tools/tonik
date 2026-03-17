@@ -127,6 +127,28 @@ class Path(object):
         with xr.open_dataset(filename, group='original', engine=self.engine) as ds:
             return ds[feature].sizes
 
+    def get_feature_info(self, feature):
+        """
+        Get metadata about a feature without loading its data.
+
+        :param feature: Feature name
+        :type feature: str
+        :return: dict with keys name, recordCount, earliestRecord, latestRecord
+        :rtype: dict
+        """
+        filename = self.feature_path(feature)
+        with xr.open_dataset(filename, group='original', engine=self.engine) as ds:
+            dt = ds[feature].coords['datetime']
+            count = int(dt.sizes['datetime'])
+            earliest = np.datetime_as_string(dt.values[0], unit='s')
+            latest = np.datetime_as_string(dt.values[-1], unit='s')
+        return {
+            'name': feature,
+            'recordCount': count,
+            'earliestRecord': earliest,
+            'latestRecord': latest,
+        }
+
     def save_labels(self, labels):
         """
         Save all labels. Labels are stored in a list of dictionaries with the following keys:
@@ -236,17 +258,85 @@ class Storage(Path):
     def directory_tree_to_dict(path):
         name = os.path.basename(path)
         if name.endswith('.zarr'):
-            return name.replace('.zarr', '')
+            feature_name = name.replace('.zarr', '')
+            return {feature_name: feature_name}
         elif os.path.isdir(path):
             dir_contents = os.listdir(path)
             if 'labels.json' in dir_contents:
                 dir_contents.remove('labels.json')
-            return {name: [Storage.directory_tree_to_dict(os.path.join(path, child)) for child in sorted(dir_contents)]}
+            children = {}
+            for child in sorted(dir_contents):
+                result = Storage.directory_tree_to_dict(
+                    os.path.join(path, child))
+                if result is not None:
+                    children.update(result)
+            return {name: children}
         else:
             if name.endswith('.nc'):
-                return name.replace('.nc', '')
+                feature_name = name.replace('.nc', '')
+                return {feature_name: feature_name}
             else:
-                return
+                return None
+
+    def _build_feature_dict_with_url(self, feature_path, feature_name, base_url=None):
+        """Build a feature info dict with metadata and an optional pre-built request URL."""
+        with xr.open_dataset(feature_path, group='original', engine=self.engine) as ds:
+            dt = ds[feature_name].coords['datetime']
+            count = int(dt.sizes['datetime'])
+            earliest = np.datetime_as_string(dt.values[0], unit='s')
+            latest = np.datetime_as_string(dt.values[-1], unit='s')
+        info = {
+            'name': feature_name,
+            'recordCount': count,
+            'earliestRecord': earliest,
+            'latestRecord': latest,
+        }
+        if base_url is not None:
+            feature_dir = os.path.dirname(feature_path)
+            rel = os.path.relpath(feature_dir, self.path)
+            subdirs = rel.split(os.sep) if rel != '.' else []
+            subdir_params = ''.join(f'&subdir={s}' for s in subdirs)
+            info['url'] = (
+                f"{base_url}feature?group={self.name}"
+                f"{subdir_params}&name={feature_name}"
+                f"&starttime={earliest}&endtime={latest}"
+            )
+        return info
+
+    def _enrich_tree(self, path, base_url=None):
+        """Recursively build the directory tree, replacing feature names with info dicts."""
+        name = os.path.basename(path)
+        if name.endswith('.zarr'):
+            feature_name = name.replace('.zarr', '')
+            return {feature_name: self._build_feature_dict_with_url(path, feature_name, base_url)}
+        elif os.path.isdir(path):
+            dir_contents = os.listdir(path)
+            if 'labels.json' in dir_contents:
+                dir_contents.remove('labels.json')
+            children = {}
+            for child in sorted(dir_contents):
+                result = self._enrich_tree(os.path.join(path, child), base_url)
+                if result is not None:
+                    children.update(result)
+            return {name: children}
+        else:
+            if name.endswith('.nc'):
+                feature_name = name.replace('.nc', '')
+                return {feature_name: self._build_feature_dict_with_url(path, feature_name, base_url)}
+            return None
+
+    def to_dict_with_info(self, base_url=None):
+        """
+        Convert the storage group to a dict with feature metadata.
+
+        :param base_url: Base URL of the API (e.g. 'http://localhost:8000/').
+            When provided, each feature dict includes a ready-to-use ``url``
+            field that points to the ``/feature`` endpoint.
+        :type base_url: str, optional
+        :return: Nested dict mirroring the directory tree with feature info dicts at the leaves.
+        :rtype: dict
+        """
+        return self._enrich_tree(self.path, base_url)
 
     def to_dict(self):
         """

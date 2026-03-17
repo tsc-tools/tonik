@@ -129,10 +129,60 @@
   </section>
 
   <section>
-    <h2>Inventory and Labels</h2>
-    <p>Query inventory of datasets:</p>
+    <h2>Inventory</h2>
+    <p>
+      The <code>/inventory</code> endpoint returns a fully nested dictionary of all available datasets within a group.
+      Every feature leaf carries metadata so you know exactly what data is available before making a feature request.
+    </p>
+
+    <h3>Tree view (default)</h3>
+    <p>Returns the complete hierarchy as nested dicts. Each feature is a dict with record metadata and a ready-to-use request URL:</p>
     <pre>GET /inventory?group=testgroup</pre>
-    <p>Query labels for a dataset:</p>
+    <pre><code>{
+  "testgroup": {
+    "WIZ": {
+      "00": {
+        "HHZ": {
+          "rsam": {
+            "name": "rsam",
+            "recordCount": 1440,
+            "earliestRecord": "2023-01-01T00:00:00",
+            "latestRecord":   "2023-01-10T23:50:00",
+            "url": "http://localhost:8003/feature?group=testgroup&amp;subdir=WIZ&amp;subdir=00&amp;subdir=HHZ&amp;name=rsam&amp;starttime=2023-01-01T00:00:00&amp;endtime=2023-01-10T23:50:00"
+          },
+          ...
+        }
+      }
+    }
+  }
+}</code></pre>
+
+    <h3>Flat view</h3>
+    <p>Pass <code>tree=false</code> to list only the top-level subdirectories:</p>
+    <pre>GET /inventory?group=testgroup&amp;tree=false</pre>
+
+    <h3>Subdir view</h3>
+    <p>Pass one or more <code>subdir</code> parameters to list features at a specific path. Returns the same feature metadata dicts:</p>
+    <pre>GET /inventory?group=testgroup&amp;subdir=WIZ&amp;subdir=00&amp;subdir=HHZ</pre>
+
+    <h3>Feature metadata fields</h3>
+    <table>
+      <thead>
+        <tr><th>Field</th><th>Type</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>name</code></td><td>string</td><td>Feature name</td></tr>
+        <tr><td><code>recordCount</code></td><td>integer</td><td>Total number of time-series records on disk</td></tr>
+        <tr><td><code>earliestRecord</code></td><td>ISO 8601 string</td><td>Timestamp of the first record</td></tr>
+        <tr><td><code>latestRecord</code></td><td>ISO 8601 string</td><td>Timestamp of the last record</td></tr>
+        <tr><td><code>url</code></td><td>string</td><td>Ready-to-use URL to request the full feature time series via <code>/feature</code></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Labels</h2>
+    <p>Query labels associated with a dataset for a specified time range:</p>
     <pre>GET /labels?group=testgroup&amp;starttime=2023-01-01T00:00:00&amp;endtime=2023-01-02T00:00:00</pre>
   </section>
 
