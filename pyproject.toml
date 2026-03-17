@@ -37,7 +37,8 @@ dependencies = [
   "fastapi>=0.128.0,<0.129",
   "matplotlib>=3.10.8,<4",
   "zarr>=3.1.5,<4",
-  "s3fs>=2025.12.0,<2026"]
+  "s3fs>=2025.12.0,<2026",
+  "torch>=2.8.0,<3"
 ]
 
 [project.optional-dependencies]
