@@ -1,0 +1,53 @@
+variables:
+  IMAGE: "artifactory.gns.cri.nz/gns/tonik-$CI_COMMIT_BRANCH"
+  APP_NAME: "tonik-$CI_COMMIT_BRANCH"
+  APP_SERVER: "Vulkan"
+  TEAM: "Volcano"
+  API_PORT: "8048"
+
+stages:
+  - build
+  - test
+  - deploy
+
+build:
+  tags:
+    - linux
+  stage: build
+  rules:
+    - if: $CI_MERGE_REQUEST_ID
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never
+    - when: always 
+  script:
+    - DOCKER_BUILDKIT=1 docker build -f grafana_example/Dockerfile -t "$IMAGE" .
+    - docker image push "$IMAGE"
+
+deploy-api:
+  tags:
+    - linux
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: never 
+    - when: always 
+  before_script:
+      - git clone https://oauth2:$gitlabcicd@git.gns.cri.nz/production/gessp-operational
+  after_script:
+      - rm -rf gessp-operational
+      - git clean -fdX  
+  script: |
+    cat > /tmp/docker_config.json <<EOF
+    {
+      "Image": "${IMAGE}",
+      "HostConfig": {
+        "PortBindings": { "8003/tcp": [{ "HostPort": "${API_PORT}" }] },
+        "ExposedPorts": { "8003/tcp": {} },
+        "RestartPolicy": { "Name": "always" },
+      }
+    }
+    EOF
+    cat /tmp/docker_config.json
+    python3 ./gessp-operational/deploy-scripts/docker_deploy.py -a "$API_APP_NAME" -s "$APP_SERVER" -t "$TEAM" /tmp/docker_config.json
+    rm /tmp/docker_config.json
