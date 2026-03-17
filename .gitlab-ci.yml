@@ -17,8 +17,6 @@ build:
   rules:
     - if: $CI_MERGE_REQUEST_ID
       when: never
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: never
     - when: always 
   script:
     - DOCKER_BUILDKIT=1 docker build -f grafana_example/Dockerfile -t "$IMAGE" .
@@ -29,8 +27,8 @@ deploy-api:
     - linux
   stage: deploy
   rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-      when: never 
+    - if: $CI_MERGE_REQUEST_ID
+      when: never
     - when: always 
   before_script:
       - git clone https://oauth2:$gitlabcicd@git.gns.cri.nz/production/gessp-operational
